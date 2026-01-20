@@ -7,6 +7,7 @@ import Image from "next/image";
 import { fetchSets, fetchInstantsFromSet } from "@/lib/scryfall-server";
 import { SetViewContent } from "./set-view-content";
 import { SetSearch } from "@/components/set-search";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -76,9 +77,11 @@ export default async function SetPage({ params }: SetPageProps) {
               </div>
             </div>
 
-            {/* Set Search */}
-            <div className="hidden md:block shrink-0">
-              <SetSearch sets={sets} currentSetCode={set.code} />
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="hidden md:block">
+                <SetSearch sets={sets} currentSetCode={set.code} />
+              </div>
+              <ThemeToggle />
             </div>
           </div>
         </div>

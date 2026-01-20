@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SetGrid } from "@/components/set-grid";
 import { FloatingHeaderSearch } from "@/components/floating-header-search";
 import { ScrollToTop } from "@/components/scroll-to-top";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { ScryfallSet } from "@/lib/scryfall";
 import { Zap } from "lucide-react";
 
@@ -32,7 +33,12 @@ export function HomeLayout({ sets }: HomeLayoutProps) {
                 </p>
               </div>
             </div>
-        <FloatingHeaderSearch searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+            <div className="flex items-center gap-2">
+              <FloatingHeaderSearch searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+              <span className="hidden md:block">
+                <ThemeToggle />
+              </span>
+            </div>
           </div>
         </div>
       </header>
