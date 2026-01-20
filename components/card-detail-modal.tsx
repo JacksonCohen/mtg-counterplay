@@ -3,7 +3,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ScryfallCard } from "@/lib/scryfall";
 import { getCardImageUrl, getOracleText } from "@/lib/scryfall";
 import { ManaCost } from "./mana-symbol";
@@ -24,6 +24,19 @@ export function CardDetailModal({
   onClose,
   onNavigate,
 }: CardDetailModalProps) {
+  const [imageLoading, setImageLoading] = useState(true);
+  const [currentImageUrl, setCurrentImageUrl] = useState("");
+
+  useEffect(() => {
+    if (card) {
+      const newImageUrl = getCardImageUrl(card, "large");
+      if (newImageUrl !== currentImageUrl) {
+        setImageLoading(true);
+        setCurrentImageUrl(newImageUrl);
+      }
+    }
+  }, [card, currentImageUrl]);
+
   // Handle keyboard navigation
   useEffect(() => {
     if (!isOpen || !onNavigate) return;
@@ -79,25 +92,32 @@ export function CardDetailModal({
             </div>
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="grid md:grid-cols-2 gap-6">
           {/* Card Image */}
           <div className="relative">
             <div className="relative aspect-488/680 rounded-lg overflow-hidden bg-secondary">
+              {imageLoading && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-full h-full bg-secondary animate-pulse" />
+                </div>
+              )}
               {imageUrl && (
                 <Image
                   src={imageUrl || "/placeholder.svg"}
                   alt={card.name}
                   fill
-                  className="object-contain"
+                  className={`object-contain transition-opacity duration-200 ${imageLoading ? "opacity-0" : "opacity-100"
+                    }`}
                   sizes="(max-width: 768px) 90vw, 50vw"
                   priority
+                  onLoad={() => setImageLoading(false)}
                 />
               )}
             </div>
 
           </div>
-          
+
           {/* Card Details */}
           <div className="flex flex-col gap-4">
             {/* Oracle Text */}
@@ -107,13 +127,13 @@ export function CardDetailModal({
                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{oracleText}</p>
               </div>
             </div>
-            
+
             {/* Set Info */}
             <div>
               <p className="text-sm text-muted-foreground mb-1">Set</p>
               <p className="font-medium">{card.set_name}</p>
             </div>
-            
+
             {/* External Link */}
             <div className="mt-auto pt-4">
               <Button asChild variant="outline" className="w-full bg-transparent">
