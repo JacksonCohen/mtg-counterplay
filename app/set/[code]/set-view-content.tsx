@@ -54,6 +54,13 @@ export function SetViewContent({ cards }: SetViewContentProps) {
     router.replace(newUrl, { scroll: false });
   }, [filters, pathname, router]);
 
+  // Clear filters when leaving the page
+  useEffect(() => {
+    return () => {
+      setFilters({ colors: [], manaValues: [], counterOnly: false });
+    };
+  }, []);
+
   // Apply filters to cards
   const filteredCards = useMemo(() => {
     return cards.filter((card) => {
