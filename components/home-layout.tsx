@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SetGrid } from "@/components/set-grid";
 import { FloatingHeaderSearch } from "@/components/floating-header-search";
+import { ScrollToTop } from "@/components/scroll-to-top";
 import type { ScryfallSet } from "@/lib/scryfall";
 import { Zap } from "lucide-react";
 
@@ -48,8 +49,10 @@ export function HomeLayout({ sets }: HomeLayoutProps) {
       </section>
 
       <main className="container mx-auto px-4 py-8">
-        <SetGrid sets={sets} searchQuery={searchQuery} />
+        <SetGrid sets={sets} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
       </main>
+
+      <ScrollToTop />
     </>
   );
 }

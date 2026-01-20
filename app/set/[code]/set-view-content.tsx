@@ -6,6 +6,7 @@ import type { ScryfallCard } from "@/lib/scryfall";
 import { getCardColors, getOracleText, isCounterspell } from "@/lib/scryfall";
 import { CardGrid } from "@/components/card-grid";
 import { FilterSidebar, type FilterState } from "@/components/filter-sidebar";
+import { ScrollToTop } from "@/components/scroll-to-top";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Filter } from "lucide-react";
@@ -95,56 +96,60 @@ export function SetViewContent({ cards }: SetViewContentProps) {
   const hasActiveFilters = filters.colors.length > 0 || filters.manaValues.length > 0 || filters.counterOnly;
 
   return (
-    <div className="flex gap-6">
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:block w-64 shrink-0">
-        <div className="sticky top-24 p-4 rounded-lg bg-card border border-border">
-          <FilterSidebar
-            filters={filters}
-            onChange={handleFilterChange}
-            totalCards={cards.length}
-            filteredCount={filteredCards.length}
-          />
-        </div>
-      </aside>
+    <>
+      <div className="flex gap-6">
+        {/* Desktop sidebar */}
+        <aside className="hidden lg:block w-64 shrink-0">
+          <div className="sticky top-24 p-4 rounded-lg bg-card border border-border">
+            <FilterSidebar
+              filters={filters}
+              onChange={handleFilterChange}
+              totalCards={cards.length}
+              filteredCount={filteredCards.length}
+            />
+          </div>
+        </aside>
 
-      {/* Main content */}
-      <div className="flex-1 min-w-0">
-        {/* Mobile filter button */}
-        <div className="lg:hidden mb-4">
-          <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="bg-transparent">
-                <Filter className="mr-2 size-4" />
-                Filters
-                {hasActiveFilters && (
-                  <span className="ml-2 px-1.5 py-0.5 text-xs rounded bg-primary text-primary-foreground">
-                    {filters.colors.length + filters.manaValues.length + (filters.counterOnly ? 1 : 0)}
-                  </span>
-                )}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 bg-card">
-              <SheetHeader>
-                <SheetTitle>Filters</SheetTitle>
-              </SheetHeader>
-              <div className="mt-4">
-                <FilterSidebar
-                  filters={filters}
-                  onChange={(newFilters) => {
-                    handleFilterChange(newFilters);
-                    setMobileFilterOpen(false);
-                  }}
-                  totalCards={cards.length}
-                  filteredCount={filteredCards.length}
-                />
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+        {/* Main content */}
+        <div className="flex-1 min-w-0">
+          {/* Mobile filter button */}
+          <div className="lg:hidden mb-4">
+            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="bg-transparent">
+                  <Filter className="mr-2 size-4" />
+                  Filters
+                  {hasActiveFilters && (
+                    <span className="ml-2 px-1.5 py-0.5 text-xs rounded bg-primary text-primary-foreground">
+                      {filters.colors.length + filters.manaValues.length + (filters.counterOnly ? 1 : 0)}
+                    </span>
+                  )}
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-72 bg-card">
+                <SheetHeader>
+                  <SheetTitle>Filters</SheetTitle>
+                </SheetHeader>
+                <div className="mt-4">
+                  <FilterSidebar
+                    filters={filters}
+                    onChange={(newFilters) => {
+                      handleFilterChange(newFilters);
+                      setMobileFilterOpen(false);
+                    }}
+                    totalCards={cards.length}
+                    filteredCount={filteredCards.length}
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
 
-        <CardGrid cards={filteredCards} />
+          <CardGrid cards={filteredCards} />
+        </div>
       </div>
-    </div>
+
+      <ScrollToTop />
+    </>
   );
 }
