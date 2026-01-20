@@ -12,14 +12,22 @@ import { cn } from "@/lib/utils";
 interface SetGridProps {
   sets: ScryfallSet[];
   searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
-export function SetGrid({ sets, searchQuery: externalSearchQuery }: SetGridProps) {
-  const [searchQuery, setSearchQuery] = useState("");
+export function SetGrid({ sets, searchQuery: externalSearchQuery, onSearchChange }: SetGridProps) {
+  const [internalSearchQuery, setInternalSearchQuery] = useState("");
   const [showCodes, setShowCodes] = useState(false);
 
   // Use external search query if provided, otherwise use internal state
-  const activeSearchQuery = externalSearchQuery ?? searchQuery;
+  const activeSearchQuery = externalSearchQuery ?? internalSearchQuery;
+  const handleSearchChange = (value: string) => {
+    if (onSearchChange) {
+      onSearchChange(value);
+    } else {
+      setInternalSearchQuery(value);
+    }
+  };
 
   const filteredSets = useMemo(() => {
     if (!activeSearchQuery.trim()) return sets;
@@ -62,13 +70,13 @@ export function SetGrid({ sets, searchQuery: externalSearchQuery }: SetGridProps
           <Input
             type="text"
             placeholder="Search sets..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={activeSearchQuery}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="px-9 h-10 bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground focus:ring-primary text-sm"
           />
-          {searchQuery && (
+          {activeSearchQuery && (
             <button
-              onClick={() => setSearchQuery("")}
+              onClick={() => handleSearchChange("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               aria-label="Clear search"
             >
