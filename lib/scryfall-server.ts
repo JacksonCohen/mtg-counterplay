@@ -25,12 +25,12 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
   const query = encodeURIComponent(`set:${setCode} type:instant`);
   let allCards: ScryfallCard[] = [];
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
-  
+
   while (url) {
     const response = await fetch(url, {
       next: { revalidate: 86400 } // Cache for 24 hours
     });
-    
+
     if (!response.ok) {
       if (response.status === 404) {
         // No instant cards in this set
@@ -38,12 +38,45 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
       }
       throw new Error('Failed to fetch cards');
     }
-    
+
     const data: ScryfallListResponse<ScryfallCard> = await response.json();
     allCards = [...allCards, ...data.data];
     url = data.has_more ? data.next_page ?? null : null;
   }
-  
-  return allCards;
+
+  // Fetch counterspells separately to mark them
+  const counterspellIds = await fetchCounterspellIds(setCode);
+
+  // Mark cards that are counterspells
+  return allCards.map(card => ({
+    ...card,
+    isCounterspell: counterspellIds.has(card.id)
+  }));
+}
+
+async function fetchCounterspellIds(setCode: string): Promise<Set<string>> {
+  const query = encodeURIComponent(`set:${setCode} type:instant oracletag:counterspell`);
+  const ids = new Set<string>();
+  let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
+
+  while (url) {
+    const response = await fetch(url, {
+      next: { revalidate: 86400 } // Cache for 24 hours
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        // No counterspells in this set
+        return ids;
+      }
+      throw new Error('Failed to fetch counterspells');
+    }
+
+    const data: ScryfallListResponse<ScryfallCard> = await response.json();
+    data.data.forEach(card => ids.add(card.id));
+    url = data.has_more ? data.next_page ?? null : null;
+  }
+
+  return ids;
 }
 

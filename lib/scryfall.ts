@@ -42,6 +42,8 @@ export interface ScryfallCard {
   }>;
   scryfall_uri: string;
   legalities: Record<string, string>;
+  // Marked as counterspell by Scryfall tags
+  isCounterspell?: boolean;
 }
 
 export interface ScryfallListResponse<T> {
@@ -52,91 +54,6 @@ export interface ScryfallListResponse<T> {
   data: T[];
 }
 
-// Counter-spell classification
-export type CounterType = 
-  | 'hard_counter'
-  | 'conditional_counter'
-  | 'soft_counter'
-  | 'protection'
-  | 'ability_counter';
-
-export interface CounterClassification {
-  type: CounterType;
-  label: string;
-  description: string;
-}
-
-export const COUNTER_CLASSIFICATIONS: Record<CounterType, CounterClassification> = {
-  hard_counter: {
-    type: 'hard_counter',
-    label: 'Hard Counter',
-    description: 'Counter target spell unconditionally'
-  },
-  conditional_counter: {
-    type: 'conditional_counter',
-    label: 'Conditional Counter',
-    description: 'Counter unless controller pays or meets a condition'
-  },
-  soft_counter: {
-    type: 'soft_counter',
-    label: 'Soft / Tempo Counter',
-    description: 'Counter and return to hand, or similar tempo effects'
-  },
-  protection: {
-    type: 'protection',
-    label: 'Protection / Pseudo-Counter',
-    description: 'Hexproof, indestructible, redirect, or "can\'t be countered" prevention'
-  },
-  ability_counter: {
-    type: 'ability_counter',
-    label: 'Ability Counter',
-    description: 'Counter activated or triggered abilities'
-  }
-};
-
-export function classifyCounterSpell(oracleText: string): CounterType | null {
-  const text = oracleText.toLowerCase();
-  
-  // Check for ability counters first (more specific)
-  if (text.includes('counter target activated') || text.includes('counter target triggered')) {
-    return 'ability_counter';
-  }
-  
-  // Soft/tempo counters
-  if (text.includes('counter target spell. its controller') ||
-      text.includes('remand')) {
-    return 'soft_counter';
-  }
-  
-  // Conditional counters
-  if (text.includes('counter target spell unless') ||
-      text.includes('counter target') && text.includes('if it')) {
-    return 'conditional_counter';
-  }
-  
-  // Hard counters
-  if (text.match(/counter target (spell|creature spell|instant|sorcery|artifact|enchantment|planeswalker)/)) {
-    return 'hard_counter';
-  }
-  
-  // Protection spells
-  if (text.includes('hexproof') || 
-      text.includes('indestructible') ||
-      text.includes('protection from') ||
-      text.includes('can\'t be countered') ||
-      text.includes('change the target') ||
-      text.includes('redirect')) {
-    return 'protection';
-  }
-  
-  return null;
-}
-
-// Returns true only for actual counterspells (not protection/hexproof effects)
-export function isCounterspell(oracleText: string): boolean {
-  const type = classifyCounterSpell(oracleText);
-  return type === 'hard_counter' || type === 'conditional_counter' || type === 'soft_counter' || type === 'ability_counter';
-}
 
 // Get card image URL with fallback for double-faced cards
 export function getCardImageUrl(card: ScryfallCard, size: 'small' | 'normal' | 'large' = 'normal'): string {

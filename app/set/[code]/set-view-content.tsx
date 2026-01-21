@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import type { ScryfallCard } from "@/lib/scryfall";
-import { getCardColors, getOracleText, isCounterspell } from "@/lib/scryfall";
+import { getCardColors } from "@/lib/scryfall";
 import { CardGrid } from "@/components/card-grid";
 import { FilterSidebar, type FilterState } from "@/components/filter-sidebar";
 import { ScrollToTop } from "@/components/scroll-to-top";
@@ -86,10 +86,9 @@ export function SetViewContent({ cards }: SetViewContentProps) {
         if (!matches) return false;
       }
 
-      // Counter-like filter
+      // Counterspell filter (using Scryfall tags)
       if (filters.counterOnly) {
-        const oracleText = getOracleText(card);
-        if (!isCounterspell(oracleText)) return false;
+        if (!card.isCounterspell) return false;
       }
 
       return true;
