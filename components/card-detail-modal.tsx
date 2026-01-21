@@ -26,6 +26,7 @@ export function CardDetailModal({
 }: CardDetailModalProps) {
   const [imageLoading, setImageLoading] = useState(true);
   const [currentImageUrl, setCurrentImageUrl] = useState("");
+  const [rotation, setRotation] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (card) {
@@ -36,6 +37,24 @@ export function CardDetailModal({
       }
     }
   }, [card, currentImageUrl]);
+
+  // Handle 3D card tilt effect
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const card = e.currentTarget;
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const rotateX = (y - centerY) / 10;
+    const rotateY = (centerX - x) / 10;
+
+    setRotation({ x: rotateX, y: rotateY });
+  };
+
+  const handleMouseLeave = () => {
+    setRotation({ x: 0, y: 0 });
+  };
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -95,8 +114,19 @@ export function CardDetailModal({
 
         <div className="grid md:grid-cols-2 gap-6">
           {/* Card Image */}
-          <div className="relative">
-            <div className="relative aspect-488/680 rounded-lg overflow-hidden bg-secondary">
+          <div
+            className="relative"
+            style={{ perspective: "1000px" }}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+          >
+            <div
+              className="relative aspect-488/680 rounded-lg overflow-hidden bg-secondary transition-transform duration-100 ease-out"
+              style={{
+                transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
+                transformStyle: "preserve-3d",
+              }}
+            >
               {imageLoading && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-full h-full bg-secondary animate-pulse" />
