@@ -103,39 +103,40 @@ export function SetViewContent({ cards }: SetViewContentProps) {
 
   // Detect convoke cards that might be castable but are filtered out
   const convokeCardsFiltered = useMemo(() => {
-    // Only show convoke warning if we have color filters from mana input
-    if (filters.colors.length === 0) return [];
+    // Only show convoke warning if we have filters active
+    const hasFilters = filters.colors.length > 0 || filters.manaValues.length > 0 || filters.counterOnly;
+    if (!hasFilters) return [];
+
+    // Create a Set of filtered card IDs for fast lookup
+    const filteredCardIds = new Set(filteredCards.map(c => c.id));
 
     return cards.filter((card) => {
+      // Skip if card is already in filtered results
+      if (filteredCardIds.has(card.id)) return false;
+
       // Check if card has convoke
       const hasConvoke = card.keywords?.some(k => k.toLowerCase() === "convoke");
       if (!hasConvoke) return false;
 
-      // Check if it matches color filters - card must be castable with the available colors
-      const cardColors = getCardColors(card);
-      const hasMatchingColor = filters.colors.some((color) => {
-        if (color === "C") {
-          return cardColors.length === 0 || cardColors.includes("C") || cardColors.every(c => c === "C");
-        }
-        return cardColors.includes(color);
-      });
-      if (!hasMatchingColor) return false;
+      // Check if it matches color filters (if active)
+      if (filters.colors.length > 0) {
+        const cardColors = getCardColors(card);
+        const hasMatchingColor = filters.colors.some((color) => {
+          if (color === "C") {
+            return cardColors.length === 0 || cardColors.includes("C") || cardColors.every(c => c === "C");
+          }
+          return cardColors.includes(color);
+        });
+        if (!hasMatchingColor) return false;
+      }
 
       // Check if it matches counterspell filter (if active)
       if (filters.counterOnly && !card.isCounterspell) return false;
 
-      // Exclude cards that are already in the filtered results
-      const cardMv = Math.floor(card.cmc);
-      if (filters.manaValues.length > 0) {
-        const alreadyShown = filters.manaValues.some(mv =>
-          mv === 10 ? cardMv >= 10 : cardMv === mv
-        );
-        if (alreadyShown) return false;
-      }
-
+      // Show all convoke cards that match filters but aren't already displayed
       return true;
     });
-  }, [cards, filters]);
+  }, [cards, filters, filteredCards]);
 
   const handleFilterChange = useCallback((newFilters: FilterState) => {
     setFilters(newFilters);
