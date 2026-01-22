@@ -1,6 +1,5 @@
 "use client";
 
-import { DynamicFavicon } from "@/components/dynamic-favicon";
 import type { ScryfallSet, ScryfallCard } from "@/lib/scryfall";
 import Link from "next/link";
 import Image from "next/image";
@@ -20,7 +19,6 @@ interface SetPageClientProps {
 export function SetPageClient({ set, sets, cards }: SetPageClientProps) {
   return (
     <>
-      <DynamicFavicon iconUrl={set.icon_svg_uri} />
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
           <div className="container px-4 py-4">

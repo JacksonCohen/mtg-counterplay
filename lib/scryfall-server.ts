@@ -22,6 +22,8 @@ export async function fetchSets(): Promise<ScryfallSet[]> {
 }
 
 export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCard[]> {
+  "use cache";
+
   const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash)`);
   let allCards: ScryfallCard[] = [];
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
@@ -55,6 +57,8 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
 }
 
 async function fetchCounterspellIds(setCode: string): Promise<Set<string>> {
+  "use cache";
+
   const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash) oracletag:counterspell`);
   const ids = new Set<string>();
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;

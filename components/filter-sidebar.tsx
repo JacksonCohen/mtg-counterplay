@@ -187,7 +187,7 @@ export function FilterSidebar({ filters, onChange, totalCards, filteredCount }: 
           )}
         />
         <p className="text-xs text-muted-foreground mt-1.5">
-          Enter your available mana (e.g., UUB, island island swamp, or blue blue black)
+          Enter available mana (e.g., UUB, island island swamp, or blue blue black)
         </p>
       </div>
 
