@@ -9,7 +9,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'MTG Instant Reference - Find Instant-Speed Interaction',
+  title: 'MTG Counterplay Reference - Find Instant-Speed Interaction',
   description: 'A competitive MTG utility for quickly referencing instant-speed cards, counterspells, flash creatures, and interaction from any Magic: The Gathering set.',
   generator: 'v0.app',
   icons: {
@@ -45,7 +45,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://svgs.scryfall.io" />
       </head>
       <body className="font-sans antialiased">
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}
         </ThemeProvider>
         <Analytics />
