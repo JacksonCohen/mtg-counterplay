@@ -60,7 +60,6 @@ export function SetPageClient({ set, sets, cards }: SetPageClientProps) {
         </header>
 
         <main className="container px-4 py-8">
-          {/* <LoadingSkeleton /> */}
           <Suspense fallback={<LoadingSkeleton />}>
             <SetViewContent cards={cards} />
           </Suspense>
