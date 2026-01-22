@@ -13,7 +13,7 @@ setInterval(() => {
   }
 }, 60000); // Clean up every minute
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   // Skip rate limiting for static assets
   if (
     request.nextUrl.pathname.startsWith('/_next') ||
