@@ -31,7 +31,7 @@ export function proxy(request: NextRequest) {
   const now = Date.now();
 
   // Rate limit configuration
-  const limit = 60; // requests
+  const limit = 200; // requests
   const window = 60000; // per minute (in milliseconds)
 
   const record = rateLimit.get(ip);
