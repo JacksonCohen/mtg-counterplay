@@ -52,6 +52,7 @@ export function ManaSymbol({ symbol, size = "md" }: ManaSymbolProps) {
         width={24}
         height={24}
         className="size-full object-contain"
+        unoptimized
       />
     </span>
   );
