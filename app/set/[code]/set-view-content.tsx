@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import type { ScryfallCard } from "@/lib/scryfall";
-import { getCardColors, getCardImageUrl } from "@/lib/scryfall";
+import { getCardImageUrl, isCardCastableWithColors, getCardColors } from "@/lib/scryfall";
 import { CardGrid } from "@/components/card-grid";
 import { FilterSidebar, type FilterState } from "@/components/filter-sidebar";
 import { ScrollToTop } from "@/components/scroll-to-top";
@@ -70,16 +70,20 @@ export function SetViewContent({ cards }: SetViewContentProps) {
   // Apply filters to cards
   const filteredCards = useMemo(() => {
     return cards.filter((card) => {
-      // Color filter
+      // Color filter - hybrid-aware: card must be castable with selected colors
       if (filters.colors.length > 0) {
-        const cardColors = getCardColors(card);
-        const hasMatchingColor = filters.colors.some((color) => {
-          if (color === "C") {
-            return cardColors.length === 0 || cardColors.includes("C") || cardColors.every(c => c === "C");
+        // Special case: if colorless is selected
+        if (filters.colors.includes("C")) {
+          const cardColors = getCardColors(card);
+          // Card must be colorless (no colors or only 'C')
+          const isColorless = cardColors.length === 0 || cardColors.every((c: string) => c === "C");
+          if (!isColorless) return false;
+        } else {
+          // Check if card is castable with the selected colors
+          if (!isCardCastableWithColors(card, filters.colors)) {
+            return false;
           }
-          return cardColors.includes(color);
-        });
-        if (!hasMatchingColor) return false;
+        }
       }
 
       // Mana value filter (checkbox style - show cards matching ANY selected mv)

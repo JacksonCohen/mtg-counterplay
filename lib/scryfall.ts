@@ -94,3 +94,61 @@ export function getCardColors(card: ScryfallCard): string[] {
   }
   return ['C']; // Colorless
 }
+
+// Check if a card is castable with the given available colors
+// Handles hybrid mana properly - card is castable if you can pay for ALL pips
+export function isCardCastableWithColors(card: ScryfallCard, availableColors: string[]): boolean {
+  // Get mana cost - handle double-faced cards
+  let manaCost = card.mana_cost;
+  if (!manaCost && card.card_faces && card.card_faces[0]) {
+    manaCost = card.card_faces[0].mana_cost;
+  }
+  if (!manaCost) return true; // No mana cost means it's castable
+
+  // Parse mana symbols from the cost
+  const symbols = parseManaSymbols(manaCost);
+
+  // Check each mana symbol
+  for (const symbol of symbols) {
+    const symbolContent = symbol.slice(1, -1); // Remove { }
+
+    // Ignore colorless/generic mana (numbers, X, etc.)
+    if (/^\d+$/.test(symbolContent) || symbolContent === 'X') {
+      continue;
+    }
+
+    // Handle hybrid mana (e.g., {G/W}, {2/G}, {G/P})
+    if (symbolContent.includes('/')) {
+      const parts = symbolContent.split('/');
+      // For hybrid, at least ONE of the colors must be available
+      const colorParts = parts.filter(p => /^[WUBRG]$/.test(p));
+
+      if (colorParts.length > 0) {
+        const canPayHybrid = colorParts.some(color => availableColors.includes(color));
+        if (!canPayHybrid) return false;
+      }
+      // If it's something like {2/G}, the G option means it needs G to use that option
+      // but the 2 option is always payable, so we consider it payable
+      continue;
+    }
+
+    // Handle Phyrexian mana (e.g., {G/P})
+    if (symbolContent.endsWith('P')) {
+      const color = symbolContent.slice(0, -2);
+      if (/^[WUBRG]$/.test(color)) {
+        // Phyrexian can be paid with life, so it's always technically castable
+        // But if they have the color, that's even better
+        continue;
+      }
+    }
+
+    // Regular single color (W, U, B, R, G)
+    if (/^[WUBRG]$/.test(symbolContent)) {
+      if (!availableColors.includes(symbolContent)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
