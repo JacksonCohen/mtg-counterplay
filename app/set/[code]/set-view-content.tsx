@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import type { ScryfallCard } from "@/lib/scryfall";
-import { getCardImageUrl, isCardCastableWithColors, getCardColors } from "@/lib/scryfall";
+import { getCardImageUrl, isCardCastableWithColors, getCardColors, cardMatchesManaValue } from "@/lib/scryfall";
 import { CardGrid } from "@/components/card-grid";
 import { FilterSidebar, type FilterState } from "@/components/filter-sidebar";
 import { ScrollToTop } from "@/components/scroll-to-top";
@@ -87,12 +87,9 @@ export function SetViewContent({ cards }: SetViewContentProps) {
       }
 
       // Mana value filter (checkbox style - show cards matching ANY selected mv)
+      // Accounts for Phyrexian mana which can be paid with life instead of mana
       if (filters.manaValues.length > 0) {
-        const cardMv = Math.floor(card.cmc);
-        // 10 represents "10+"
-        const matches = filters.manaValues.some(mv =>
-          mv === 10 ? cardMv >= 10 : cardMv === mv
-        );
+        const matches = filters.manaValues.some(mv => cardMatchesManaValue(card, mv));
         if (!matches) return false;
       }
 

@@ -95,6 +95,50 @@ export function getCardColors(card: ScryfallCard): string[] {
   return ['C']; // Colorless
 }
 
+// Get the number of Phyrexian mana symbols in a card's cost
+export function countPhyrexianMana(card: ScryfallCard): number {
+  // Get mana cost - handle double-faced cards
+  let manaCost = card.mana_cost;
+  if (!manaCost && card.card_faces && card.card_faces[0]) {
+    manaCost = card.card_faces[0].mana_cost;
+  }
+  if (!manaCost) return 0;
+
+  // Parse mana symbols from the cost
+  const symbols = parseManaSymbols(manaCost);
+  let phyrexianCount = 0;
+
+  for (const symbol of symbols) {
+    const symbolContent = symbol.slice(1, -1); // Remove { }
+    // Phyrexian mana ends with /P (e.g., {W/P}, {U/P}, {B/P}, {R/P}, {G/P})
+    if (symbolContent.includes('/P')) {
+      phyrexianCount++;
+    }
+  }
+
+  return phyrexianCount;
+}
+
+// Check if a card matches a given mana value, accounting for Phyrexian mana
+// Phyrexian mana can be paid with life, so a card with {1}{B/P} (CMC 2) can be cast for 0, 1, or 2 mana
+export function cardMatchesManaValue(card: ScryfallCard, targetManaValue: number): boolean {
+  const cmc = Math.floor(card.cmc);
+  const phyrexianCount = countPhyrexianMana(card);
+
+  // The minimum mana needed is CMC minus all Phyrexian symbols (pay life for all)
+  const minMana = cmc - phyrexianCount;
+  // The maximum mana needed is the full CMC (pay mana for all)
+  const maxMana = cmc;
+
+  // For "10+" filter, we want cards with CMC >= 10
+  if (targetManaValue === 10) {
+    return cmc >= 10;
+  }
+
+  // Card matches if the target mana value is within the range [minMana, maxMana]
+  return targetManaValue >= minMana && targetManaValue <= maxMana;
+}
+
 // Check if a card is castable with the given available colors
 // Handles hybrid mana properly - card is castable if you can pay for ALL pips
 export function isCardCastableWithColors(card: ScryfallCard, availableColors: string[]): boolean {
