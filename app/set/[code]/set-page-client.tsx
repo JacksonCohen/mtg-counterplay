@@ -37,6 +37,7 @@ export function SetPageClient({ set, sets, cards }: SetPageClientProps) {
                     width={32}
                     height={32}
                     className="size-8 object-contain shrink-0 invert light:invert-0"
+                    unoptimized
                   />
                   <div className="min-w-0">
                     <h1 className="text-xl font-bold text-foreground truncate">

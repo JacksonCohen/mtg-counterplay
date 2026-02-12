@@ -141,6 +141,7 @@ export function FilterSidebar({ filters, onChange, totalCards, filteredCount }: 
                   height={24}
                   src={`/mana/${color.code}.svg`}
                   alt={color.name}
+                  unoptimized
                 />
               </button>
             );
