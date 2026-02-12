@@ -1,19 +1,22 @@
 import 'server-only';
 import type { ScryfallCard, ScryfallListResponse, ScryfallSet } from './scryfall';
 
+// Cache duration: 7 days
+const CACHE_DURATION = 604800; // 7 days in seconds
+
 export async function fetchSets(): Promise<ScryfallSet[]> {
   "use cache";
-  
+
   const response = await fetch('https://api.scryfall.com/sets', {
-    next: { revalidate: 86400 } // Cache for 24 hours
+    next: { revalidate: CACHE_DURATION }
   });
-  
+
   if (!response.ok) {
     throw new Error('Failed to fetch sets');
   }
-  
+
   const data: ScryfallListResponse<ScryfallSet> = await response.json();
-  
+
   // Filter to expansion, core, masters, draft_innovation sets (main playable sets)
   // Excludes commander sets as they're not typically used in limited formats
   const validTypes = ['expansion', 'core', 'masters', 'draft_innovation', 'funny'];
@@ -32,7 +35,7 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
 
   while (url) {
     const response = await fetch(url, {
-      next: { revalidate: 86400 } // Cache for 24 hours
+      next: { revalidate: CACHE_DURATION }
     });
 
     if (!response.ok) {
@@ -73,7 +76,7 @@ async function fetchCounterspellIds(setCode: string): Promise<Set<string>> {
 
   while (url) {
     const response = await fetch(url, {
-      next: { revalidate: 86400 } // Cache for 24 hours
+      next: { revalidate: CACHE_DURATION }
     });
 
     if (!response.ok) {
@@ -102,7 +105,7 @@ async function fetchSpecialGuestsFromSet(setCode: string): Promise<ScryfallCard[
 
   while (url) {
     const response = await fetch(url, {
-      next: { revalidate: 86400 }
+      next: { revalidate: CACHE_DURATION }
     });
 
     if (!response.ok) {
@@ -130,7 +133,7 @@ async function fetchSpecialGuestsCounterspellIds(setCode: string): Promise<Set<s
 
   while (url) {
     const response = await fetch(url, {
-      next: { revalidate: 86400 }
+      next: { revalidate: CACHE_DURATION }
     });
 
     if (!response.ok) {
