@@ -15,7 +15,8 @@ export async function fetchSets(): Promise<ScryfallSet[]> {
   const data: ScryfallListResponse<ScryfallSet> = await response.json();
   
   // Filter to expansion, core, masters, draft_innovation sets (main playable sets)
-  const validTypes = ['expansion', 'core', 'masters', 'draft_innovation', 'commander', 'funny'];
+  // Excludes commander sets as they're not typically used in limited formats
+  const validTypes = ['expansion', 'core', 'masters', 'draft_innovation', 'funny'];
   return data.data
     .filter(set => validTypes.includes(set.set_type) && set.card_count > 0)
     .sort((a, b) => new Date(b.released_at).getTime() - new Date(a.released_at).getTime());
