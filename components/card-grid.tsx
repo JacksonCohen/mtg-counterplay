@@ -1,9 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import type { ScryfallCard } from "@/lib/scryfall";
 import { getCardImageUrl } from "@/lib/scryfall";
-import { CardDetailModal } from "./card-detail-modal";
+
+// Code split the modal - only load when needed
+const CardDetailModal = dynamic(() => import("./card-detail-modal").then(mod => ({ default: mod.CardDetailModal })), {
+  ssr: false,
+});
 
 interface CardGridProps {
   cards: ScryfallCard[];
@@ -54,6 +59,7 @@ export function CardGrid({ cards }: CardGridProps) {
             key={card.id}
             card={card}
             onClick={() => setSelectedCardIndex(index)}
+            isPriority={index < 18}
           />
         ))}
       </div>
@@ -73,9 +79,10 @@ export function CardGrid({ cards }: CardGridProps) {
 interface CardTileProps {
   card: ScryfallCard;
   onClick: () => void;
+  isPriority?: boolean;
 }
 
-function CardTile({ card, onClick }: CardTileProps) {
+function CardTile({ card, onClick, isPriority = false }: CardTileProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const imageUrl = getCardImageUrl(card, "normal");
 
@@ -95,7 +102,8 @@ function CardTile({ card, onClick }: CardTileProps) {
         <img
           src={imageUrl}
           alt={card.name}
-          loading="lazy"
+          loading={isPriority ? "eager" : "lazy"}
+          fetchPriority={isPriority ? "high" : "low"}
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
           onLoad={() => setImageLoaded(true)}
         />

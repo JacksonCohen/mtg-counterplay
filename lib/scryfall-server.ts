@@ -1,15 +1,40 @@
 import 'server-only';
 import type { ScryfallCard, ScryfallListResponse, ScryfallSet } from './scryfall';
 
-// Cache duration: 7 days
-const CACHE_DURATION = 604800; // 7 days in seconds
+const CACHE_DURATION = 604800; // 7 days
+
+// Helper function to fetch with retry on rate limits
+// Increased delays to handle more parallel builds without hitting rate limits
+async function fetchWithRetry(url: string, retries = 5, delay = 500): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    const response = await fetch(url, {
+      next: { revalidate: CACHE_DURATION }
+    });
+
+    if (response.ok || response.status === 404) {
+      return response;
+    }
+
+    // Rate limited or server error - retry with backoff
+    if (response.status === 429 || response.status >= 500) {
+      if (i < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+        continue;
+      }
+    }
+
+    return response;
+  }
+
+  return fetch(url, {
+    next: { revalidate: CACHE_DURATION }
+  });
+}
 
 export async function fetchSets(): Promise<ScryfallSet[]> {
   "use cache";
 
-  const response = await fetch('https://api.scryfall.com/sets', {
-    next: { revalidate: CACHE_DURATION }
-  });
+  const response = await fetchWithRetry('https://api.scryfall.com/sets');
 
   if (!response.ok) {
     throw new Error('Failed to fetch sets');
@@ -34,9 +59,7 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
 
   while (url) {
-    const response = await fetch(url, {
-      next: { revalidate: CACHE_DURATION }
-    });
+    const response = await fetchWithRetry(url);
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -75,16 +98,13 @@ async function fetchCounterspellIds(setCode: string): Promise<Set<string>> {
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
 
   while (url) {
-    const response = await fetch(url, {
-      next: { revalidate: CACHE_DURATION }
-    });
+    const response = await fetchWithRetry(url);
 
     if (!response.ok) {
-      if (response.status === 404) {
-        // No counterspells in this set
-        return ids;
-      }
-      throw new Error('Failed to fetch counterspells');
+      // Return what we have so far for any error
+      // Counterspell tagging is optional, better to show cards without tags than fail
+      console.warn(`Failed to fetch counterspells for ${setCode}: ${response.status}`);
+      return ids;
     }
 
     const data: ScryfallListResponse<ScryfallCard> = await response.json();
@@ -104,16 +124,13 @@ async function fetchSpecialGuestsFromSet(setCode: string): Promise<ScryfallCard[
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
 
   while (url) {
-    const response = await fetch(url, {
-      next: { revalidate: CACHE_DURATION }
-    });
+    const response = await fetchWithRetry(url);
 
     if (!response.ok) {
-      if (response.status === 404) {
-        // No SPG cards for this set
-        return [];
-      }
-      throw new Error('Failed to fetch Special Guests cards');
+      // Return empty array for any error (404, rate limits, etc.)
+      // Special Guests are optional, so we don't want to fail the build
+      console.warn(`Failed to fetch Special Guests for ${setCode}: ${response.status}`);
+      return allCards;
     }
 
     const data: ScryfallListResponse<ScryfallCard> = await response.json();
@@ -132,15 +149,13 @@ async function fetchSpecialGuestsCounterspellIds(setCode: string): Promise<Set<s
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
 
   while (url) {
-    const response = await fetch(url, {
-      next: { revalidate: CACHE_DURATION }
-    });
+    const response = await fetchWithRetry(url);
 
     if (!response.ok) {
-      if (response.status === 404) {
-        return ids;
-      }
-      throw new Error('Failed to fetch Special Guests counterspells');
+      // Return what we have so far for any error
+      // Special Guests counterspells are optional
+      console.warn(`Failed to fetch Special Guests counterspells for ${setCode}: ${response.status}`);
+      return ids;
     }
 
     const data: ScryfallListResponse<ScryfallCard> = await response.json();
