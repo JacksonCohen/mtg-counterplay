@@ -4,8 +4,7 @@ import type { ScryfallCard, ScryfallListResponse, ScryfallSet } from './scryfall
 const CACHE_DURATION = 604800; // 7 days
 
 // Helper function to fetch with retry on rate limits
-// Increased delays to handle more parallel builds without hitting rate limits
-async function fetchWithRetry(url: string, retries = 5, delay = 500): Promise<Response> {
+async function fetchWithRetry(url: string, retries = 7, delay = 2000): Promise<Response> {
   for (let i = 0; i < retries; i++) {
     const response = await fetch(url, {
       next: { revalidate: CACHE_DURATION }

@@ -6,14 +6,15 @@ interface SetPageProps {
   params: Promise<{ code: string }>;
 }
 
-// Pre-generate static pages for the 10 most recent sets
+// Pre-generate static pages for the 7 most recent sets
+// Build will be slower but more sets get optimized performance
 export async function generateStaticParams() {
   const sets = await fetchSets();
 
-  // Generate static pages for the 10 most recent sets
+  // Generate static pages for the 7 most recent sets
+  // With conservative retry delays (2s base), this should complete without timeout
   // Older sets will be generated on-demand with ISR
-  // Revalidation is handled by fetch() calls with 7-day cache duration
-  return sets.slice(0, 10).map((set) => ({
+  return sets.slice(0, 7).map((set) => ({
     code: set.code.toLowerCase(),
   }));
 }
