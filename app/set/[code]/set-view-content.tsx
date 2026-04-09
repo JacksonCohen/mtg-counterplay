@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useState, useMemo, useCallback } from "react";
+import { parseAsArrayOf, parseAsString, parseAsInteger, parseAsBoolean, useQueryStates } from "nuqs";
 import type { ScryfallCard } from "@/lib/scryfall";
 import { getCardImageUrl, isCardCastableWithColors, getCardColors, cardMatchesManaValue } from "@/lib/scryfall";
 import { CardGrid } from "@/components/card-grid";
@@ -17,85 +17,38 @@ interface SetViewContentProps {
   cards: ScryfallCard[];
 }
 
-function parseFiltersFromUrl(searchParams: URLSearchParams): FilterState {
-  const colors = searchParams.get("colors")?.split(",").filter(Boolean) || [];
-  const manaValues = searchParams.get("mv")?.split(",").map(Number).filter(n => !Number.isNaN(n)) || [];
-  const counterOnly = searchParams.get("counter") === "true";
-  const manaInput = searchParams.get("mana") || "";
-
-  return { colors, manaValues, counterOnly, manaInput };
-}
-
-function filtersToUrl(filters: FilterState): string {
-  const params = new URLSearchParams();
-  if (filters.colors.length > 0) {
-    params.set("colors", filters.colors.join(","));
-  }
-  if (filters.manaValues.length > 0) {
-    params.set("mv", filters.manaValues.sort((a, b) => a - b).join(","));
-  }
-  if (filters.counterOnly) {
-    params.set("counter", "true");
-  }
-  if (filters.manaInput.trim() !== "") {
-    params.set("mana", filters.manaInput);
-  }
-  return params.toString();
-}
-
 export function SetViewContent({ cards }: SetViewContentProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const [filters, setFilters] = useState<FilterState>({
-    colors: [],
-    manaValues: [],
-    counterOnly: false,
-    manaInput: "",
-  });
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Parse URL filters after mount
-  useEffect(() => {
-    if (!isInitialized) {
-      const urlFilters = parseFiltersFromUrl(searchParams);
-      setFilters(urlFilters);
-      setIsInitialized(true);
+  const [urlState, setUrlState] = useQueryStates(
+    {
+      colors: parseAsArrayOf(parseAsString).withDefault([]),
+      mv: parseAsArrayOf(parseAsInteger).withDefault([]),
+      counter: parseAsBoolean.withDefault(false),
+      mana: parseAsString.withDefault(""),
+    },
+    {
+      // Batch updates to avoid multiple re-renders
+      history: "replace",
+      shallow: true,
+      clearOnDefault: true,
     }
-  }, [searchParams, isInitialized]);
-
-  // Update URL when filters change
-  useEffect(() => {
-    if (!isInitialized) return;
-
-    const queryString = filtersToUrl(filters);
-    const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
-    router.replace(newUrl, { scroll: false });
-  }, [filters, pathname, router, isInitialized]);
-
-  // Clear filters when leaving the page
-  useEffect(() => {
-    return () => {
-      setFilters({ colors: [], manaValues: [], counterOnly: false, manaInput: "" });
-    };
-  }, []);
+  );
 
   // Apply filters to cards
   const filteredCards = useMemo(() => {
     return cards.filter((card) => {
       // Color filter - hybrid-aware: card must be castable with selected colors
-      if (filters.colors.length > 0) {
+      if (urlState.colors.length > 0) {
         // Special case: if colorless is selected
-        if (filters.colors.includes("C")) {
+        if (urlState.colors.includes("C")) {
           const cardColors = getCardColors(card);
           // Card must be colorless (no colors or only 'C')
           const isColorless = cardColors.length === 0 || cardColors.every((c: string) => c === "C");
           if (!isColorless) return false;
         } else {
           // Check if card is castable with the selected colors
-          if (!isCardCastableWithColors(card, filters.colors)) {
+          if (!isCardCastableWithColors(card, urlState.colors)) {
             return false;
           }
         }
@@ -103,24 +56,24 @@ export function SetViewContent({ cards }: SetViewContentProps) {
 
       // Mana value filter (checkbox style - show cards matching ANY selected mv)
       // Accounts for Phyrexian mana which can be paid with life instead of mana
-      if (filters.manaValues.length > 0) {
-        const matches = filters.manaValues.some(mv => cardMatchesManaValue(card, mv));
+      if (urlState.mv.length > 0) {
+        const matches = urlState.mv.some(mv => cardMatchesManaValue(card, mv));
         if (!matches) return false;
       }
 
       // Counterspell filter (using Scryfall tags)
-      if (filters.counterOnly) {
+      if (urlState.counter) {
         if (!card.isCounterspell) return false;
       }
 
       return true;
     });
-  }, [cards, filters]);
+  }, [cards, urlState]);
 
   // Detect convoke cards that might be castable but are filtered out
   const convokeCardsFiltered = useMemo(() => {
     // Only show convoke warning if we have filters active
-    const hasFilters = filters.colors.length > 0 || filters.manaValues.length > 0 || filters.counterOnly;
+    const hasFilters = urlState.colors.length > 0 || urlState.mv.length > 0 || urlState.counter;
     if (!hasFilters) return [];
 
     // Create a Set of filtered card IDs for fast lookup
@@ -135,18 +88,23 @@ export function SetViewContent({ cards }: SetViewContentProps) {
       if (!hasConvoke) return false;
 
       // Check if it matches counterspell filter (if active)
-      if (filters.counterOnly && !card.isCounterspell) return false;
+      if (urlState.counter && !card.isCounterspell) return false;
 
       // Show all convoke cards regardless of color/mana filters
       return true;
     });
-  }, [cards, filters, filteredCards]);
+  }, [cards, urlState, filteredCards]);
 
   const handleFilterChange = useCallback((newFilters: FilterState) => {
-    setFilters(newFilters);
-  }, []);
+    setUrlState({
+      colors: newFilters.colors,
+      mv: newFilters.manaValues,
+      counter: newFilters.counterOnly,
+      mana: newFilters.manaInput,
+    });
+  }, [setUrlState]);
 
-  const hasActiveFilters = filters.colors.length > 0 || filters.manaValues.length > 0 || filters.counterOnly;
+  const hasActiveFilters = urlState.colors.length > 0 || urlState.mv.length > 0 || urlState.counter;
 
   return (
     <>
@@ -155,7 +113,12 @@ export function SetViewContent({ cards }: SetViewContentProps) {
         <aside className="hidden lg:block w-64 shrink-0">
           <div className="sticky top-24 p-4 rounded-lg bg-card border border-border">
             <FilterSidebar
-              filters={filters}
+              filters={{
+                colors: urlState.colors,
+                manaValues: urlState.mv,
+                counterOnly: urlState.counter,
+                manaInput: urlState.mana,
+              }}
               onChange={handleFilterChange}
               totalCards={cards.length}
               filteredCount={filteredCards.length}
@@ -208,7 +171,7 @@ export function SetViewContent({ cards }: SetViewContentProps) {
                   Filters
                   {hasActiveFilters && (
                     <span className="ml-2 px-1.5 py-0.5 text-xs rounded bg-primary text-primary-foreground">
-                      {filters.colors.length + filters.manaValues.length + (filters.counterOnly ? 1 : 0)}
+                      {urlState.colors.length + urlState.mv.length + (urlState.counter ? 1 : 0)}
                     </span>
                   )}
                 </Button>
@@ -219,7 +182,12 @@ export function SetViewContent({ cards }: SetViewContentProps) {
                 </SheetHeader>
                 <div className="mt-4">
                   <FilterSidebar
-                    filters={filters}
+                    filters={{
+                      colors: urlState.colors,
+                      manaValues: urlState.mv,
+                      counterOnly: urlState.counter,
+                      manaInput: urlState.mana,
+                    }}
                     onChange={handleFilterChange}
                     totalCards={cards.length}
                     filteredCount={filteredCards.length}
