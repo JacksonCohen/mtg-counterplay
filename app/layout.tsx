@@ -6,8 +6,16 @@ import { SpeedInsights } from "@vercel/speed-insights/next"
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const _geist = Geist({
+  subsets: ["latin"],
+  display: 'swap',
+  preload: true,
+});
+const _geistMono = Geist_Mono({
+  subsets: ["latin"],
+  display: 'swap',
+  preload: true,
+});
 
 export const metadata: Metadata = {
   title: 'MTG Counterplay Reference - Find Instant-Speed Interaction',
@@ -31,6 +39,8 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://cards.scryfall.io" />
         <link rel="preconnect" href="https://svgs.scryfall.io" crossOrigin="" />
         <link rel="dns-prefetch" href="https://svgs.scryfall.io" />
+        <link rel="preconnect" href="https://api.scryfall.com" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://api.scryfall.com" />
       </head>
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>

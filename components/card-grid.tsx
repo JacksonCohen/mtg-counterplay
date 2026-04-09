@@ -59,7 +59,7 @@ export function CardGrid({ cards }: CardGridProps) {
             key={card.id}
             card={card}
             onClick={() => setSelectedCardIndex(index)}
-            isPriority={index < 18}
+            isPriority={index < 24}
           />
         ))}
       </div>

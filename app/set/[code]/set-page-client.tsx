@@ -3,12 +3,16 @@
 import type { ScryfallSet, ScryfallCard } from "@/lib/scryfall";
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { SetViewContent } from "./set-view-content";
-import { SetSearch } from "@/components/set-search";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Suspense } from "react";
+
+const SetSearch = dynamic(() => import("@/components/set-search").then(mod => ({ default: mod.SetSearch })), {
+  ssr: false,
+});
 
 interface SetPageClientProps {
   set: ScryfallSet;

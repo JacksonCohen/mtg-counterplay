@@ -48,17 +48,32 @@ export function SetViewContent({ cards }: SetViewContentProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [filters, setFilters] = useState<FilterState>(() =>
-    parseFiltersFromUrl(searchParams)
-  );
+  const [filters, setFilters] = useState<FilterState>({
+    colors: [],
+    manaValues: [],
+    counterOnly: false,
+    manaInput: "",
+  });
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Parse URL filters after mount
+  useEffect(() => {
+    if (!isInitialized) {
+      const urlFilters = parseFiltersFromUrl(searchParams);
+      setFilters(urlFilters);
+      setIsInitialized(true);
+    }
+  }, [searchParams, isInitialized]);
 
   // Update URL when filters change
   useEffect(() => {
+    if (!isInitialized) return;
+
     const queryString = filtersToUrl(filters);
     const newUrl = queryString ? `${pathname}?${queryString}` : pathname;
     router.replace(newUrl, { scroll: false });
-  }, [filters, pathname, router]);
+  }, [filters, pathname, router, isInitialized]);
 
   // Clear filters when leaving the page
   useEffect(() => {
