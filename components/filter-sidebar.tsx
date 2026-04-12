@@ -74,9 +74,20 @@ export function FilterSidebar({ filters, onChange, totalCards, filteredCount }: 
 
   const selectManaValueAndBelow = useCallback(
     (mv: number) => {
-      // Select all mana values from 0 to mv (inclusive), keeping existing selections
-      const valuesToAdd = MANA_VALUES.filter((v) => v <= mv);
-      const newManaValues = Array.from(new Set([...filters.manaValues, ...valuesToAdd])).sort((a, b) => a - b);
+      const valuesToToggle = MANA_VALUES.filter((v) => v <= mv);
+
+      // Check if all values up to mv are already selected
+      const allSelected = valuesToToggle.every((v) => filters.manaValues.includes(v));
+
+      let newManaValues: number[];
+      if (allSelected) {
+        // Deselect all values up to mv
+        newManaValues = filters.manaValues.filter((v) => v > mv);
+      } else {
+        // Select all values up to mv, keeping existing selections
+        newManaValues = Array.from(new Set([...filters.manaValues, ...valuesToToggle])).sort((a, b) => a - b);
+      }
+
       onChange({ ...filters, manaValues: newManaValues });
     },
     [filters, onChange]
