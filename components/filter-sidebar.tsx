@@ -37,6 +37,8 @@ const MANA_VALUES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export function FilterSidebar({ filters, onChange, totalCards, filteredCount }: FilterSidebarProps) {
   const [localManaInput, setLocalManaInput] = useState(filters.manaInput);
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
+  const [isLongPress, setIsLongPress] = useState(false);
 
   // Sync local input with external filter changes (e.g., clear filters button)
   useEffect(() => {
@@ -69,6 +71,53 @@ export function FilterSidebar({ filters, onChange, totalCards, filteredCount }: 
     },
     [filters, onChange]
   );
+
+  const selectManaValueAndBelow = useCallback(
+    (mv: number) => {
+      // Select all mana values from 0 to mv (inclusive), keeping existing selections
+      const valuesToAdd = MANA_VALUES.filter((v) => v <= mv);
+      const newManaValues = Array.from(new Set([...filters.manaValues, ...valuesToAdd])).sort((a, b) => a - b);
+      onChange({ ...filters, manaValues: newManaValues });
+    },
+    [filters, onChange]
+  );
+
+  const handleManaValueMouseDown = useCallback(
+    (mv: number, e: React.MouseEvent<HTMLLabelElement> | React.TouchEvent<HTMLLabelElement>) => {
+      e.preventDefault();
+      setIsLongPress(false);
+      const timer = setTimeout(() => {
+        setIsLongPress(true);
+        selectManaValueAndBelow(mv);
+      }, 500); // 500ms for long press
+      setLongPressTimer(timer);
+    },
+    [selectManaValueAndBelow]
+  );
+
+  const handleManaValueMouseUp = useCallback(
+    (mv: number, e: React.MouseEvent<HTMLLabelElement> | React.TouchEvent<HTMLLabelElement>) => {
+      e.preventDefault();
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        setLongPressTimer(null);
+      }
+      // Only toggle if it wasn't a long press
+      if (!isLongPress) {
+        toggleManaValue(mv);
+      }
+      setIsLongPress(false);
+    },
+    [longPressTimer, isLongPress, toggleManaValue]
+  );
+
+  const handleManaValueMouseLeave = useCallback(() => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      setLongPressTimer(null);
+    }
+    setIsLongPress(false);
+  }, [longPressTimer]);
 
 
   const clearFilters = useCallback(() => {
@@ -160,16 +209,21 @@ export function FilterSidebar({ filters, onChange, totalCards, filteredCount }: 
               <label
                 key={mv}
                 className={cn(
-                  "flex items-center justify-center h-8 rounded cursor-pointer text-xs font-medium transition-colors",
+                  "flex items-center justify-center h-8 rounded cursor-pointer text-xs font-medium transition-colors select-none",
                   isSelected
                     ? "bg-primary text-primary-foreground"
                     : "bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground"
                 )}
+                onMouseDown={(e) => handleManaValueMouseDown(mv, e)}
+                onMouseUp={(e) => handleManaValueMouseUp(mv, e)}
+                onMouseLeave={handleManaValueMouseLeave}
+                onTouchStart={(e) => handleManaValueMouseDown(mv, e)}
+                onTouchEnd={(e) => handleManaValueMouseUp(mv, e)}
               >
                 <Checkbox
                   checked={isSelected}
-                  onCheckedChange={() => toggleManaValue(mv)}
                   className="sr-only"
+                  aria-hidden="true"
                 />
                 {label}
               </label>
