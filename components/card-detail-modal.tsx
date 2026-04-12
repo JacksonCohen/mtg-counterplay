@@ -45,10 +45,13 @@ export function CardDetailModal({
     const y = e.clientY - rect.top;
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
-    const rotateX = (y - centerY) / 10;
-    const rotateY = (centerX - x) / 10;
 
-    setRotation({ x: rotateX, y: rotateY });
+    // Use requestAnimationFrame to throttle updates to display refresh rate
+    requestAnimationFrame(() => {
+      const rotateX = (y - centerY) / 10;
+      const rotateY = (centerX - x) / 10;
+      setRotation({ x: rotateX, y: rotateY });
+    });
   };
 
   const handleMouseLeave = () => {

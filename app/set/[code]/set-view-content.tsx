@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useTransition, useDeferredValue } from "react";
 import { parseAsArrayOf, parseAsString, parseAsInteger, parseAsBoolean, useQueryStates } from "nuqs";
 import type { ScryfallCard } from "@/lib/scryfall";
 import { getCardImageUrl, isCardCastableWithColors, getCardColors, cardMatchesManaValue } from "@/lib/scryfall";
@@ -19,6 +19,7 @@ interface SetViewContentProps {
 
 export function SetViewContent({ cards }: SetViewContentProps) {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   const [urlState, setUrlState] = useQueryStates(
     {
@@ -35,20 +36,23 @@ export function SetViewContent({ cards }: SetViewContentProps) {
     }
   );
 
+  // Defer expensive filtering to keep UI responsive
+  const deferredUrlState = useDeferredValue(urlState);
+
   // Apply filters to cards
   const filteredCards = useMemo(() => {
     return cards.filter((card) => {
       // Color filter - hybrid-aware: card must be castable with selected colors
-      if (urlState.colors.length > 0) {
+      if (deferredUrlState.colors.length > 0) {
         // Special case: if colorless is selected
-        if (urlState.colors.includes("C")) {
+        if (deferredUrlState.colors.includes("C")) {
           const cardColors = getCardColors(card);
           // Card must be colorless (no colors or only 'C')
           const isColorless = cardColors.length === 0 || cardColors.every((c: string) => c === "C");
           if (!isColorless) return false;
         } else {
           // Check if card is castable with the selected colors
-          if (!isCardCastableWithColors(card, urlState.colors)) {
+          if (!isCardCastableWithColors(card, deferredUrlState.colors)) {
             return false;
           }
         }
@@ -56,24 +60,24 @@ export function SetViewContent({ cards }: SetViewContentProps) {
 
       // Mana value filter (checkbox style - show cards matching ANY selected mv)
       // Accounts for Phyrexian mana which can be paid with life instead of mana
-      if (urlState.mv.length > 0) {
-        const matches = urlState.mv.some(mv => cardMatchesManaValue(card, mv));
+      if (deferredUrlState.mv.length > 0) {
+        const matches = deferredUrlState.mv.some(mv => cardMatchesManaValue(card, mv));
         if (!matches) return false;
       }
 
       // Counterspell filter (using Scryfall tags)
-      if (urlState.counter) {
+      if (deferredUrlState.counter) {
         if (!card.isCounterspell) return false;
       }
 
       return true;
     });
-  }, [cards, urlState]);
+  }, [cards, deferredUrlState]);
 
   // Detect convoke cards that might be castable but are filtered out
   const convokeCardsFiltered = useMemo(() => {
     // Only show convoke warning if we have filters active
-    const hasFilters = urlState.colors.length > 0 || urlState.mv.length > 0 || urlState.counter;
+    const hasFilters = deferredUrlState.colors.length > 0 || deferredUrlState.mv.length > 0 || deferredUrlState.counter;
     if (!hasFilters) return [];
 
     // Create a Set of filtered card IDs for fast lookup
@@ -88,21 +92,23 @@ export function SetViewContent({ cards }: SetViewContentProps) {
       if (!hasConvoke) return false;
 
       // Check if it matches counterspell filter (if active)
-      if (urlState.counter && !card.isCounterspell) return false;
+      if (deferredUrlState.counter && !card.isCounterspell) return false;
 
       // Show all convoke cards regardless of color/mana filters
       return true;
     });
-  }, [cards, urlState, filteredCards]);
+  }, [cards, deferredUrlState, filteredCards]);
 
   const handleFilterChange = useCallback((newFilters: FilterState) => {
-    setUrlState({
-      colors: newFilters.colors,
-      mv: newFilters.manaValues,
-      counter: newFilters.counterOnly,
-      mana: newFilters.manaInput,
+    startTransition(() => {
+      setUrlState({
+        colors: newFilters.colors,
+        mv: newFilters.manaValues,
+        counter: newFilters.counterOnly,
+        mana: newFilters.manaInput,
+      });
     });
-  }, [setUrlState]);
+  }, [setUrlState, startTransition]);
 
   const hasActiveFilters = urlState.colors.length > 0 || urlState.mv.length > 0 || urlState.counter;
 
@@ -197,7 +203,9 @@ export function SetViewContent({ cards }: SetViewContentProps) {
             </Sheet>
           </div>
 
-          <CardGrid cards={filteredCards} />
+          <div className={isPending ? "opacity-60 transition-opacity" : ""}>
+            <CardGrid cards={filteredCards} />
+          </div>
         </div>
       </div>
 
