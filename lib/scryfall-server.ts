@@ -9,8 +9,15 @@ const EXTRA_CARD_SHEETS: Record<string, string[]> = {
   'tsp': ['tsb'],  // Time Spiral: Timeshifted
 };
 
-const MANUAL_INCLUSIONS: Record<string, string[]> = {
-  // Example: 'stx': ['Card Name'],
+type ManualInclusion = string | { name: string; cost: string };
+
+const MANUAL_INCLUSIONS: Record<string, ManualInclusion[]> = {
+  // Examples:
+  // 'stx': ['Card Name'],  // Simple name
+  // 'neo': [{ name: 'Card Name', cost: '{2}{U}' }],  // With custom cost for effective CMC
+  'sos': [{
+    n
+  }]
 };
 
 // Helper function to fetch with retry on rate limits
@@ -250,15 +257,18 @@ async function fetchExtraCardsCounterspellIds(setCode: string): Promise<Set<stri
 async function fetchManualInclusionsFromSet(setCode: string): Promise<ScryfallCard[]> {
   "use cache";
 
-  const cardNames = MANUAL_INCLUSIONS[setCode.toLowerCase()] || [];
-  if (cardNames.length === 0) {
+  const inclusions = MANUAL_INCLUSIONS[setCode.toLowerCase()] || [];
+  if (inclusions.length === 0) {
     return [];
   }
 
   const allCards: ScryfallCard[] = [];
 
   // Fetch each manually included card by name
-  for (const cardName of cardNames) {
+  for (const inclusion of inclusions) {
+    const cardName = typeof inclusion === 'string' ? inclusion : inclusion.name;
+    const customCost = typeof inclusion === 'object' ? inclusion.cost : undefined;
+
     const query = encodeURIComponent(`set:${setCode} !"${cardName}"`);
     const url = `https://api.scryfall.com/cards/search?q=${query}`;
 
@@ -272,6 +282,7 @@ async function fetchManualInclusionsFromSet(setCode: string): Promise<ScryfallCa
     const data: ScryfallListResponse<ScryfallCard> = await response.json();
     if (data.data.length > 0) {
       allCards.push(data.data[0]); // Take first match
+      // Note: customCost will be used for effectiveCmc calculation in feature branch
     }
   }
 
