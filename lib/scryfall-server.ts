@@ -3,6 +3,22 @@ import type { ScryfallCard, ScryfallListResponse, ScryfallSet } from './scryfall
 
 const CACHE_DURATION = 604800; // 7 days
 
+// Simple helper to calculate mana value from manual cost strings
+function calculateManualCost(cost: string): number {
+  if (!cost) return 0;
+  const symbols = cost.match(/\{[^}]+\}/g) || [];
+  let total = 0;
+  for (const symbol of symbols) {
+    const content = symbol.slice(1, -1);
+    if (/^\d+$/.test(content)) {
+      total += parseInt(content, 10);
+    } else if (content !== 'X') {
+      total += 1;
+    }
+  }
+  return total;
+}
+
 const EXTRA_CARD_SHEETS: Record<string, string[]> = {
   'sos': ['soa'], // Secrets of Strixhaven: Mystical Archives
   'stx': ['sta'],  // Strixhaven: Mystical Archives
@@ -12,12 +28,28 @@ const EXTRA_CARD_SHEETS: Record<string, string[]> = {
 type ManualInclusion = string | { name: string; cost: string };
 
 const MANUAL_INCLUSIONS: Record<string, ManualInclusion[]> = {
-  // Examples:
-  // 'stx': ['Card Name'],  // Simple name
-  // 'neo': [{ name: 'Card Name', cost: '{2}{U}' }],  // With custom cost for effective CMC
-  'sos': [{
-    n
-  }]
+  'sos': [
+    {
+      name: 'Brush Off',
+      cost: '{1}{U}'
+    },
+    {
+      name: 'Run Behind',
+      cost: '{2}{U}'
+    },
+    {
+      name: 'Page, Loose Leaf',
+      cost: '{0}'
+    },
+    {
+      name: 'Wilt in the Heat',
+      cost: '{R}{W}'
+    },
+    {
+      name: "Visionary's Dance",
+      cost: '{2}'
+    },
+  ]
 };
 
 // Helper function to fetch with retry on rate limits
@@ -101,17 +133,39 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
   const manualCards = await fetchManualInclusionsFromSet(setCode);
   allCards = [...allCards, ...manualCards];
 
+  // Deduplicate cards by ID (manual inclusions may overlap with other sources)
+  const uniqueCards = new Map<string, ScryfallCard>();
+  for (const card of allCards) {
+    if (!uniqueCards.has(card.id)) {
+      uniqueCards.set(card.id, card);
+    } else {
+      // If card exists, preserve any _manualCost from manual inclusions
+      const existing = uniqueCards.get(card.id)!;
+      const manualCost = (card as any)._manualCost;
+      if (manualCost && !(existing as any)._manualCost) {
+        uniqueCards.set(card.id, { ...existing, _manualCost: manualCost } as any);
+      }
+    }
+  }
+  const deduplicatedCards = Array.from(uniqueCards.values());
+
   // Fetch counterspells separately to mark them
   const counterspellIds = await fetchCounterspellIds(setCode);
   const spgCounterspellIds = await fetchSpecialGuestsCounterspellIds(setCode);
   const extraCounterspellIds = await fetchExtraCardsCounterspellIds(setCode);
   const allCounterspellIds = new Set([...counterspellIds, ...spgCounterspellIds, ...extraCounterspellIds]);
 
-  // Mark cards that are counterspells
-  return allCards.map(card => ({
-    ...card,
-    isCounterspell: allCounterspellIds.has(card.id)
-  }));
+  // Mark cards that are counterspells and calculate effectiveCmc from manual costs
+  return deduplicatedCards.map(card => {
+    const manualCost = (card as any)._manualCost;
+    const effectiveCmc = manualCost ? calculateManualCost(manualCost) : undefined;
+
+    return {
+      ...card,
+      isCounterspell: allCounterspellIds.has(card.id),
+      effectiveCmc: effectiveCmc
+    };
+  });
 }
 
 async function fetchCounterspellIds(setCode: string): Promise<Set<string>> {
@@ -281,8 +335,9 @@ async function fetchManualInclusionsFromSet(setCode: string): Promise<ScryfallCa
 
     const data: ScryfallListResponse<ScryfallCard> = await response.json();
     if (data.data.length > 0) {
-      allCards.push(data.data[0]); // Take first match
-      // Note: customCost will be used for effectiveCmc calculation in feature branch
+      const card = data.data[0];
+      // Store custom cost for effectiveCmc calculation (will be used in feature branch)
+      allCards.push(customCost ? { ...card, _manualCost: customCost } as any : card);
     }
   }
 

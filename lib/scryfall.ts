@@ -45,6 +45,8 @@ export interface ScryfallCard {
   legalities: Record<string, string>;
   // Marked as counterspell by Scryfall tags
   isCounterspell?: boolean;
+  // Effective CMC for manual cost overrides
+  effectiveCmc?: number;
 }
 
 export interface ScryfallListResponse<T> {
@@ -121,9 +123,11 @@ export function countPhyrexianMana(card: ScryfallCard): number {
 
 // Check if a card matches a given mana value, accounting for Phyrexian mana
 // Phyrexian mana can be paid with life, so a card with {1}{B/P} (CMC 2) can be cast for 0, 1, or 2 mana
+// Uses effectiveCmc for manual cost overrides
 export function cardMatchesManaValue(card: ScryfallCard, targetManaValue: number): boolean {
-  const cmc = Math.floor(card.cmc);
-  const phyrexianCount = countPhyrexianMana(card);
+  // Use effectiveCmc if available (for manual cost overrides)
+  const cmc = card.effectiveCmc !== undefined ? Math.floor(card.effectiveCmc) : Math.floor(card.cmc);
+  const phyrexianCount = card.effectiveCmc !== undefined ? 0 : countPhyrexianMana(card);
 
   // The minimum mana needed is CMC minus all Phyrexian symbols (pay life for all)
   const minMana = cmc - phyrexianCount;
