@@ -3,6 +3,12 @@ import type { ScryfallCard, ScryfallListResponse, ScryfallSet } from './scryfall
 
 const CACHE_DURATION = 604800; // 7 days
 
+const EXTRA_CARD_SHEETS: Record<string, string[]> = {
+  'sos': ['soa'], // Secrets of Strixhaven: Mystical Archives
+  'stx': ['sta'],  // Strixhaven: Mystical Archives
+  'tsp': ['tsb'],  // Time Spiral: Timeshifted
+};
+
 // Mechanics that enable instant-speed play
 // TODO: Add keywords per set
 const SET_INSTANT_MECHANICS: Record<string, string[]> = {
@@ -191,10 +197,15 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
   const spgCards = await fetchSpecialGuestsFromSet(setCode);
   allCards = [...allCards, ...spgCards];
 
+  // Fetch extra card sheets (mystical archives, timeshifted, etc.)
+  const extraCards = await fetchExtraCardsFromSet(setCode);
+  allCards = [...allCards, ...extraCards];
+
   // Fetch counterspells separately to mark them
   const counterspellIds = await fetchCounterspellIds(setCode);
   const spgCounterspellIds = await fetchSpecialGuestsCounterspellIds(setCode);
-  const allCounterspellIds = new Set([...counterspellIds, ...spgCounterspellIds]);
+  const extraCounterspellIds = await fetchExtraCardsCounterspellIds(setCode);
+  const allCounterspellIds = new Set([...counterspellIds, ...spgCounterspellIds, ...extraCounterspellIds]);
 
   // Mark cards that are counterspells
   return allCards.map(card => ({
@@ -292,6 +303,82 @@ async function fetchSpecialGuestsCounterspellIds(setCode: string): Promise<Set<s
     const data: ScryfallListResponse<ScryfallCard> = await response.json();
     data.data.forEach(card => ids.add(card.id));
     url = data.has_more ? data.next_page ?? null : null;
+  }
+
+  return ids;
+}
+
+async function fetchExtraCardsFromSet(setCode: string): Promise<ScryfallCard[]> {
+  "use cache";
+
+  const extraSheets = EXTRA_CARD_SHEETS[setCode.toLowerCase()] || [];
+  if (extraSheets.length === 0) {
+    return [];
+  }
+
+  // Build query with set-specific instant-speed mechanics
+  const mechanics = SET_INSTANT_MECHANICS[setCode.toLowerCase()] || [];
+  const mechanicsQuery = mechanics.length > 0
+    ? ` OR ${mechanics.map(m => `keyword:${m}`).join(' OR ')}`
+    : '';
+
+  let allCards: ScryfallCard[] = [];
+
+  // Fetch cards from each extra sheet
+  for (const sheetCode of extraSheets) {
+    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash${mechanicsQuery})`);
+    let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
+
+    while (url) {
+      const response = await fetchWithRetry(url);
+
+      if (!response.ok) {
+        console.warn(`Failed to fetch extra cards from ${sheetCode} for ${setCode}: ${response.status}`);
+        break;
+      }
+
+      const data: ScryfallListResponse<ScryfallCard> = await response.json();
+      allCards = [...allCards, ...data.data];
+      url = data.has_more ? data.next_page ?? null : null;
+    }
+  }
+
+  return allCards;
+}
+
+async function fetchExtraCardsCounterspellIds(setCode: string): Promise<Set<string>> {
+  "use cache";
+
+  const extraSheets = EXTRA_CARD_SHEETS[setCode.toLowerCase()] || [];
+  if (extraSheets.length === 0) {
+    return new Set();
+  }
+
+  // Build query with set-specific instant-speed mechanics
+  const mechanics = SET_INSTANT_MECHANICS[setCode.toLowerCase()] || [];
+  const mechanicsQuery = mechanics.length > 0
+    ? ` OR ${mechanics.map(m => `keyword:${m}`).join(' OR ')}`
+    : '';
+
+  const ids = new Set<string>();
+
+  // Fetch counterspells from each extra sheet
+  for (const sheetCode of extraSheets) {
+    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash${mechanicsQuery}) oracletag:counterspell`);
+    let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
+
+    while (url) {
+      const response = await fetchWithRetry(url);
+
+      if (!response.ok) {
+        console.warn(`Failed to fetch extra counterspells from ${sheetCode} for ${setCode}: ${response.status}`);
+        break;
+      }
+
+      const data: ScryfallListResponse<ScryfallCard> = await response.json();
+      data.data.forEach(card => ids.add(card.id));
+      url = data.has_more ? data.next_page ?? null : null;
+    }
   }
 
   return ids;
