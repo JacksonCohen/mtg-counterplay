@@ -1,5 +1,6 @@
 import 'server-only';
 import type { ScryfallCard, ScryfallListResponse, ScryfallSet } from './scryfall';
+import { extractAbilityCost, calculateManaValue, getOracleText } from './scryfall';
 
 const CACHE_DURATION = 604800; // 7 days
 
@@ -31,6 +32,36 @@ const INSTANT_SPEED_MECHANICS = [
 const MANUAL_INCLUSIONS: Record<string, string[]> = {
   // Example: 'stx': ['Card Name'],
 };
+
+// Calculate effective CMC for cards with instant-speed mechanics
+// Returns the CMC of the instant-speed ability, or undefined if using normal CMC
+// TODO: Fix effective CMC calculations - needs more robust parsing and testing
+function calculateEffectiveCmc(card: ScryfallCard): number | undefined {
+  const oracleText = getOracleText(card);
+  const keywords = card.keywords || [];
+
+  // Check if card has any instant-speed mechanics
+  const hasInstantMechanic = INSTANT_SPEED_MECHANICS.some(mechanic =>
+    keywords.some(k => k.toLowerCase() === mechanic.toLowerCase()) ||
+    oracleText.toLowerCase().includes(mechanic.toLowerCase())
+  );
+
+  // If it's a regular instant or has flash, use normal CMC
+  if (card.type_line.toLowerCase().includes('instant') ||
+      keywords.some(k => k.toLowerCase() === 'flash')) {
+    return undefined; // Use normal CMC
+  }
+
+  // If it has an instant-speed mechanic, calculate based on ability cost
+  if (hasInstantMechanic) {
+    const abilityCost = extractAbilityCost(oracleText, keywords.length > 0 ? keywords : INSTANT_SPEED_MECHANICS);
+    if (abilityCost) {
+      return calculateManaValue(abilityCost);
+    }
+  }
+
+  return undefined; // Use normal CMC
+}
 
 // Helper function to fetch with retry on rate limits
 async function fetchWithRetry(url: string, retries = 7, delay = 2000): Promise<Response> {
@@ -122,11 +153,15 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
   const extraCounterspellIds = await fetchExtraCardsCounterspellIds(setCode);
   const allCounterspellIds = new Set([...counterspellIds, ...spgCounterspellIds, ...extraCounterspellIds]);
 
-  // Mark cards that are counterspells
-  return allCards.map(card => ({
-    ...card,
-    isCounterspell: allCounterspellIds.has(card.id)
-  }));
+  // Mark cards that are counterspells and calculate effective CMC
+  return allCards.map(card => {
+    const effectiveCmc = calculateEffectiveCmc(card);
+    return {
+      ...card,
+      isCounterspell: allCounterspellIds.has(card.id),
+      effectiveCmc: effectiveCmc
+    };
+  });
 }
 
 async function fetchCounterspellIds(setCode: string): Promise<Set<string>> {

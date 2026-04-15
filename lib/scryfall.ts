@@ -45,6 +45,8 @@ export interface ScryfallCard {
   legalities: Record<string, string>;
   // Marked as counterspell by Scryfall tags
   isCounterspell?: boolean;
+  // Effective CMC for cards with instant-speed abilities (based on ability cost, not casting cost)
+  effectiveCmc?: number;
 }
 
 export interface ScryfallListResponse<T> {
@@ -121,9 +123,13 @@ export function countPhyrexianMana(card: ScryfallCard): number {
 
 // Check if a card matches a given mana value, accounting for Phyrexian mana
 // Phyrexian mana can be paid with life, so a card with {1}{B/P} (CMC 2) can be cast for 0, 1, or 2 mana
+// For cards with instant-speed mechanics, uses effectiveCmc (ability cost) instead of casting cost
 export function cardMatchesManaValue(card: ScryfallCard, targetManaValue: number): boolean {
-  const cmc = Math.floor(card.cmc);
-  const phyrexianCount = countPhyrexianMana(card);
+  // Use effective CMC for instant-speed abilities if available
+  const cmc = card.effectiveCmc !== undefined ? Math.floor(card.effectiveCmc) : Math.floor(card.cmc);
+
+  // Only count Phyrexian mana if using the card's normal CMC (not ability cost)
+  const phyrexianCount = card.effectiveCmc !== undefined ? 0 : countPhyrexianMana(card);
 
   // The minimum mana needed is CMC minus all Phyrexian symbols (pay life for all)
   const minMana = cmc - phyrexianCount;
@@ -137,6 +143,98 @@ export function cardMatchesManaValue(card: ScryfallCard, targetManaValue: number
 
   // Card matches if the target mana value is within the range [minMana, maxMana]
   return targetManaValue >= minMana && targetManaValue <= maxMana;
+}
+
+// Calculate mana value from a mana cost string (e.g., "{2}{W}" = 3, "{U}{U}{B}" = 3)
+export function calculateManaValue(manaCost: string): number {
+  if (!manaCost) return 0;
+
+  const symbols = parseManaSymbols(manaCost);
+  let total = 0;
+
+  for (const symbol of symbols) {
+    const content = symbol.slice(1, -1); // Remove { }
+
+    // Generic mana (numbers)
+    if (/^\d+$/.test(content)) {
+      total += parseInt(content, 10);
+      continue;
+    }
+
+    // X counts as 0
+    if (content === 'X') {
+      continue;
+    }
+
+    // Hybrid mana like {2/W} counts as 2 (the higher value)
+    if (content.includes('/')) {
+      const parts = content.split('/');
+      // Find numeric part or count as 1
+      const numericPart = parts.find(p => /^\d+$/.test(p));
+      total += numericPart ? parseInt(numericPart, 10) : 1;
+      continue;
+    }
+
+    // Single colored mana symbol (W, U, B, R, G, C) counts as 1
+    total += 1;
+  }
+
+  return total;
+}
+
+// Extract instant-speed ability cost from oracle text
+// Returns the mana cost string if found, or null
+export function extractAbilityCost(oracleText: string, keywords: string[] = []): string | null {
+  if (!oracleText || !keywords.length) return null;
+
+  // Patterns for different mechanics
+  const patterns: Record<string, RegExp> = {
+    'cycling': /Cycling\s+(\{[^}]+\})/i,
+    'landcycling': /[A-Za-z]+cycling\s+(\{[^}]+\})/i,
+    'ninjutsu': /Ninjutsu\s+(\{[^}]+\})/i,
+    'channel': /Channel\s+[—–-]\s+(\{[^}]+\})/i,
+    'foretell': /Foretell\s+(\{[^}]+\})/i,
+    'bloodrush': /Bloodrush\s+[—–-]\s+(\{[^}]+\})/i,
+    'escape': /Escape\s*[—–-]\s*(\{[^}]+\})/i,
+    'reinforce': /Reinforce\s+\d+\s*[—–-]\s*(\{[^}]+\})/i,
+    'sneak': /Sneak\s+(\{[^}]+\})/i,
+  };
+
+  // Fixed-cost mechanics
+  const fixedCosts: Record<string, string> = {
+    'morph': '{3}',
+    'megamorph': '{3}',
+    'manifest': '{3}',
+    'disguise': '{3}',
+    'cloak': '{3}',
+  };
+
+  // Check for fixed costs first
+  for (const keyword of keywords) {
+    const fixedCost = fixedCosts[keyword.toLowerCase()];
+    if (fixedCost && oracleText.toLowerCase().includes(keyword.toLowerCase())) {
+      return fixedCost;
+    }
+  }
+
+  // Check for pattern-based costs
+  for (const keyword of keywords) {
+    const pattern = patterns[keyword.toLowerCase()];
+    if (pattern) {
+      const match = oracleText.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+  }
+
+  // Special case: jump-start uses the card's normal cost
+  if (keywords.some(k => k.toLowerCase() === 'jump-start') &&
+      oracleText.toLowerCase().includes('jump-start')) {
+    return null; // Use normal CMC
+  }
+
+  return null;
 }
 
 // Check if a card is castable with the given available colors
