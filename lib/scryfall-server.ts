@@ -28,6 +28,10 @@ const INSTANT_SPEED_MECHANICS = [
   'escape',
 ];
 
+const MANUAL_INCLUSIONS: Record<string, string[]> = {
+  // Example: 'stx': ['Card Name'],
+};
+
 // Helper function to fetch with retry on rate limits
 async function fetchWithRetry(url: string, retries = 7, delay = 2000): Promise<Response> {
   for (let i = 0; i < retries; i++) {
@@ -107,6 +111,10 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
   // Fetch extra card sheets (mystical archives, timeshifted, etc.)
   const extraCards = await fetchExtraCardsFromSet(setCode);
   allCards = [...allCards, ...extraCards];
+
+  // Fetch manually included cards
+  const manualCards = await fetchManualInclusionsFromSet(setCode);
+  allCards = [...allCards, ...manualCards];
 
   // Fetch counterspells separately to mark them
   const counterspellIds = await fetchCounterspellIds(setCode);
@@ -274,5 +282,36 @@ async function fetchExtraCardsCounterspellIds(setCode: string): Promise<Set<stri
   }
 
   return ids;
+}
+
+async function fetchManualInclusionsFromSet(setCode: string): Promise<ScryfallCard[]> {
+  "use cache";
+
+  const cardNames = MANUAL_INCLUSIONS[setCode.toLowerCase()] || [];
+  if (cardNames.length === 0) {
+    return [];
+  }
+
+  const allCards: ScryfallCard[] = [];
+
+  // Fetch each manually included card by name
+  for (const cardName of cardNames) {
+    const query = encodeURIComponent(`set:${setCode} !"${cardName}"`);
+    const url = `https://api.scryfall.com/cards/search?q=${query}`;
+
+    const response = await fetchWithRetry(url);
+
+    if (!response.ok) {
+      console.warn(`Failed to fetch manual inclusion "${cardName}" from ${setCode}: ${response.status}`);
+      continue;
+    }
+
+    const data: ScryfallListResponse<ScryfallCard> = await response.json();
+    if (data.data.length > 0) {
+      allCards.push(data.data[0]); // Take first match
+    }
+  }
+
+  return allCards;
 }
 
