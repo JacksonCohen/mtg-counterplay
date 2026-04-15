@@ -163,7 +163,8 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
     return {
       ...card,
       isCounterspell: allCounterspellIds.has(card.id),
-      effectiveCmc: effectiveCmc
+      effectiveCmc: effectiveCmc,
+      mana_cost: manualCost || card.mana_cost
     };
   });
 }
