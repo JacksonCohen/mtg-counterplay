@@ -9,115 +9,6 @@ const EXTRA_CARD_SHEETS: Record<string, string[]> = {
   'tsp': ['tsb'],  // Time Spiral: Timeshifted
 };
 
-// Mechanics that enable instant-speed play
-// TODO: Add keywords per set
-const SET_INSTANT_MECHANICS: Record<string, string[]> = {
-  // 2025-2024 Sets
-  'fdn': [],
-  'dsk': [],
-  'blb': [],
-  'mh3': [],
-  'otj': [],
-  'big': [],
-  'mkm': [],
-  'lci': [],
-
-  // 2023 Sets
-  'woe': [],
-  'mat': [],
-  'cmm': [],
-  'ltr': [],
-  'mom': [],
-  'moc': [],
-  'one': [],
-
-  // 2022 Sets
-  'bro': [],
-  'brc': [],
-  'dmu': [],
-  'clb': [],
-  'snc': [],
-  'ncc': [],
-  'neo': [],
-  'nec': [],
-
-  // 2021 Sets
-  'vow': [],
-  'mid': [],
-  'afr': [],
-  'mh2': [],
-  'stx': [],
-  'khm': [],
-
-  // 2020 Sets
-  'khc': [],
-  'cmr': [],
-  'znr': [],
-  'znc': [],
-  'm21': [],
-  'iko': [],
-  'thb': [],
-
-  // 2019 Sets
-  'eld': [],
-  'm20': [],
-  'mh1': [],
-  'war': [],
-  'rna': [],
-
-  // 2018 Sets
-  'grn': [],
-  'm19': [],
-  'dom': [],
-  'rix': [],
-
-  // 2017 Sets
-  'xln': [],
-  'hou': [],
-  'akh': [],
-  'mm3': [],
-  'aer': [],
-
-  // 2016 Sets
-  'emn': [],
-  'soi': [],
-  'ogw': [],
-
-  // 2015 Sets
-  'bfz': [],
-  'dtk': [],
-  'frf': [],
-
-  // 2014 Sets
-  'ktk': [],
-  'm15': [],
-
-  // 2013 Sets
-  'ths': [],
-  'm14': [],
-
-  // 2012 Sets
-  'rtr': [],
-  'm13': [],
-  'avr': [],
-
-  // Older Notable Sets
-  'tsp': [],
-  'ons': [],
-  'scg': [],
-  'lgn': [],
-  'jud': [],
-  'tor': [],
-  'ody': [],
-  'chk': [],
-  'bok': [],
-  'sok': [],
-
-  // Masters/Remaster Sets
-  'uma': [],
-  'pca': [],
-};
-
 const MANUAL_INCLUSIONS: Record<string, string[]> = {
   // Example: 'stx': ['Card Name'],
 };
@@ -171,13 +62,7 @@ export async function fetchSets(): Promise<ScryfallSet[]> {
 export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCard[]> {
   "use cache";
 
-  // Build query with set-specific instant-speed mechanics
-  const mechanics = SET_INSTANT_MECHANICS[setCode.toLowerCase()] || [];
-  const mechanicsQuery = mechanics.length > 0
-    ? ` OR ${mechanics.map(m => `keyword:${m}`).join(' OR ')}`
-    : '';
-
-  const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash${mechanicsQuery})`);
+  const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash)`);
   let allCards: ScryfallCard[] = [];
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
 
@@ -225,13 +110,7 @@ export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCar
 async function fetchCounterspellIds(setCode: string): Promise<Set<string>> {
   "use cache";
 
-  // Build query with set-specific instant-speed mechanics
-  const mechanics = SET_INSTANT_MECHANICS[setCode.toLowerCase()] || [];
-  const mechanicsQuery = mechanics.length > 0
-    ? ` OR ${mechanics.map(m => `keyword:${m}`).join(' OR ')}`
-    : '';
-
-  const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash${mechanicsQuery}) oracletag:counterspell`);
+  const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash) oracletag:counterspell`);
   const ids = new Set<string>();
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
 
@@ -256,14 +135,8 @@ async function fetchCounterspellIds(setCode: string): Promise<Set<string>> {
 async function fetchSpecialGuestsFromSet(setCode: string): Promise<ScryfallCard[]> {
   "use cache";
 
-  // Build query with set-specific instant-speed mechanics
-  const mechanics = SET_INSTANT_MECHANICS[setCode.toLowerCase()] || [];
-  const mechanicsQuery = mechanics.length > 0
-    ? ` OR ${mechanics.map(m => `keyword:${m}`).join(' OR ')}`
-    : '';
-
   // Fetch Special Guests cards released alongside the main set
-  const query = encodeURIComponent(`set:spg date:${setCode} (type:instant OR keyword:flash${mechanicsQuery})`);
+  const query = encodeURIComponent(`set:spg date:${setCode} (type:instant OR keyword:flash)`);
   let allCards: ScryfallCard[] = [];
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
 
@@ -288,13 +161,7 @@ async function fetchSpecialGuestsFromSet(setCode: string): Promise<ScryfallCard[
 async function fetchSpecialGuestsCounterspellIds(setCode: string): Promise<Set<string>> {
   "use cache";
 
-  // Build query with set-specific instant-speed mechanics
-  const mechanics = SET_INSTANT_MECHANICS[setCode.toLowerCase()] || [];
-  const mechanicsQuery = mechanics.length > 0
-    ? ` OR ${mechanics.map(m => `keyword:${m}`).join(' OR ')}`
-    : '';
-
-  const query = encodeURIComponent(`set:spg date:${setCode} (type:instant OR keyword:flash${mechanicsQuery}) oracletag:counterspell`);
+  const query = encodeURIComponent(`set:spg date:${setCode} (type:instant OR keyword:flash) oracletag:counterspell`);
   const ids = new Set<string>();
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
 
@@ -324,17 +191,11 @@ async function fetchExtraCardsFromSet(setCode: string): Promise<ScryfallCard[]> 
     return [];
   }
 
-  // Build query with set-specific instant-speed mechanics
-  const mechanics = SET_INSTANT_MECHANICS[setCode.toLowerCase()] || [];
-  const mechanicsQuery = mechanics.length > 0
-    ? ` OR ${mechanics.map(m => `keyword:${m}`).join(' OR ')}`
-    : '';
-
   let allCards: ScryfallCard[] = [];
 
   // Fetch cards from each extra sheet
   for (const sheetCode of extraSheets) {
-    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash${mechanicsQuery})`);
+    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash)`);
     let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
 
     while (url) {
@@ -362,17 +223,11 @@ async function fetchExtraCardsCounterspellIds(setCode: string): Promise<Set<stri
     return new Set();
   }
 
-  // Build query with set-specific instant-speed mechanics
-  const mechanics = SET_INSTANT_MECHANICS[setCode.toLowerCase()] || [];
-  const mechanicsQuery = mechanics.length > 0
-    ? ` OR ${mechanics.map(m => `keyword:${m}`).join(' OR ')}`
-    : '';
-
   const ids = new Set<string>();
 
   // Fetch counterspells from each extra sheet
   for (const sheetCode of extraSheets) {
-    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash${mechanicsQuery}) oracletag:counterspell`);
+    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash) oracletag:counterspell`);
     let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
 
     while (url) {
