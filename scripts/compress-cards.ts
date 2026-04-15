@@ -13,10 +13,17 @@ interface MinimalCard {
   name: string;
   mana_cost: string;
   cmc: number;
+  type_line: string;
+  oracle_text: string;
   effectiveCmc?: number;
   colors: string[];
   color_identity: string[];
   keywords?: string[];
+  set: string;
+  set_name: string;
+  rarity: string;
+  scryfall_uri: string;
+  legalities: Record<string, string>;
   image_uris?: {
     small: string;
     normal: string;
@@ -25,6 +32,7 @@ interface MinimalCard {
   card_faces?: Array<{
     name: string;
     mana_cost: string;
+    oracle_text: string;
     image_uris?: {
       small: string;
       normal: string;
@@ -49,8 +57,15 @@ function compressCard(card: ScryfallCard): MinimalCard {
     name: card.name,
     mana_cost: card.mana_cost,
     cmc: card.cmc,
+    type_line: card.type_line,
+    oracle_text: card.oracle_text,
     colors: card.colors,
     color_identity: card.color_identity,
+    set: card.set,
+    set_name: card.set_name,
+    rarity: card.rarity,
+    scryfall_uri: card.scryfall_uri,
+    legalities: card.legalities,
   };
 
   // Only include optional fields if they exist
@@ -74,6 +89,7 @@ function compressCard(card: ScryfallCard): MinimalCard {
     minimal.card_faces = card.card_faces.map(face => ({
       name: face.name,
       mana_cost: face.mana_cost,
+      oracle_text: face.oracle_text,
       ...(face.image_uris && {
         image_uris: {
           small: face.image_uris.small,

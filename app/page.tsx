@@ -1,7 +1,7 @@
 "use cache";
 
 import { Suspense } from "react";
-import { fetchSets } from "@/lib/scryfall-server";
+import { fetchSets } from "@/lib/scryfall-compressed";
 import { HomeLayout } from "@/components/home-layout";
 
 export default async function HomePage() {

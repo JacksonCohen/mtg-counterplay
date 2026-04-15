@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { fetchSets, fetchInstantsFromSet } from "@/lib/scryfall-server";
+import { fetchSets, fetchInstantsFromSet } from "@/lib/scryfall-compressed";
 import { SetPageClient } from "./set-page-client";
 
 interface SetPageProps {
