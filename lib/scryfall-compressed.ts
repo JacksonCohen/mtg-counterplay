@@ -29,8 +29,6 @@ async function loadCompressedData(): Promise<SetWithCards[]> {
  * Get all sets - combines static compressed data with recent sets from API
  */
 export async function fetchSets(): Promise<ScryfallSet[]> {
-  "use cache";
-
   // Get static sets from compressed data
   const compressedData = await loadCompressedData();
   const staticSets = compressedData.map(({ set }) => set);
@@ -56,8 +54,6 @@ export async function fetchSets(): Promise<ScryfallSet[]> {
  * Get cards for a set - uses compressed data if available, otherwise fetches from API
  */
 export async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCard[]> {
-  "use cache";
-
   // Try to find in compressed data first
   const compressedData = await loadCompressedData();
   const setData = compressedData.find(({ set }) => set.code === setCode);
