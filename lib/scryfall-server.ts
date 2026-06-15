@@ -52,10 +52,15 @@ const MANUAL_INCLUSIONS: Record<string, ManualInclusion[]> = {
   ]
 };
 
+const USER_AGENT = 'MTG-Instant-Spell-Reference/1.0';
+
 // Helper function to fetch with retry on rate limits
 async function fetchWithRetry(url: string, retries = 7, delay = 2000): Promise<Response> {
   for (let i = 0; i < retries; i++) {
     const response = await fetch(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
       next: { revalidate: CACHE_DURATION }
     });
 
@@ -75,6 +80,9 @@ async function fetchWithRetry(url: string, retries = 7, delay = 2000): Promise<R
   }
 
   return fetch(url, {
+    headers: {
+      'User-Agent': USER_AGENT,
+    },
     next: { revalidate: CACHE_DURATION }
   });
 }
