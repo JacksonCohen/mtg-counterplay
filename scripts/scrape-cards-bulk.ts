@@ -29,6 +29,7 @@ interface BulkCard extends ScryfallCard {
   oracle_tags?: string[];
   promo_types?: string[];
   frame_effects?: string[];
+  lang: string;
 }
 
 // Simple helper to calculate mana value from manual cost strings
@@ -170,6 +171,11 @@ async function streamAndFilterCards(
     if (Date.now() - lastLog > 2000) {
       process.stdout.write(`\rProcessed ${totalProcessed.toLocaleString()} cards, matched ${totalMatched.toLocaleString()}...`);
       lastLog = Date.now();
+    }
+
+    // Skip non-English cards
+    if (card.lang !== 'en') {
+      return;
     }
 
     // Skip if not instant-speed
