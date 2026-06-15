@@ -11,6 +11,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "start": "next start",
     "scrape": "tsx scripts/scrape-cards.ts",
+    "scrape:bulk": "tsx scripts/scrape-cards-bulk.ts",
     "split": "tsx scripts/split-cards.ts",
     "compress": "tsx scripts/compress-cards.ts"
   },
