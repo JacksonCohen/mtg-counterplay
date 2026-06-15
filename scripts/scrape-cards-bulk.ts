@@ -252,15 +252,35 @@ function processAndDeduplicateCards(
       }
     }
 
-    // Deduplicate by oracle_id, preferring non-alternate-art printings
-    const uniqueCards = new Map<string, ScryfallCard>();
+    // Deduplicate by oracle_id within set, preferring base printings
+    const uniqueCards = new Map<string, BulkCard>();
     for (const card of cards) {
-      const key = card.oracle_id || card.id;
-      const isAlternate = card.promo_types?.length || card.frame_effects?.some(
-        e => ['showcase', 'extendedart', 'inverted', 'etched', 'gilded', 'textured', 'serialized'].includes(e)
-      );
+      if (!card.oracle_id) continue;
 
-      if (!uniqueCards.has(key) || isAlternate === false) {
+      const existing = uniqueCards.get(card.oracle_id);
+
+      // Determine if this is a "better" (more base) printing than what we have
+      const shouldReplace = !existing || (() => {
+        // Prefer non-promo over promo
+        const existingIsPromo = (existing as BulkCard).promo_types && (existing as BulkCard).promo_types!.length > 0;
+        const cardIsPromo = card.promo_types && card.promo_types.length > 0;
+        if (existingIsPromo && !cardIsPromo) return true;
+        if (!existingIsPromo && cardIsPromo) return false;
+
+        // Prefer standard frames over special frames
+        const specialFrames = ['showcase', 'extendedart', 'borderless'];
+        const existingHasSpecial = (existing as BulkCard).frame_effects?.some((e: string) => specialFrames.includes(e));
+        const cardHasSpecial = card.frame_effects?.some((e: string) => specialFrames.includes(e));
+        if (existingHasSpecial && !cardHasSpecial) return true;
+        if (!existingHasSpecial && cardHasSpecial) return false;
+
+        // Prefer lowest collector number (base printing)
+        const existingNum = parseInt((existing as any).collector_number) || 999999;
+        const cardNum = parseInt((card as any).collector_number) || 999999;
+        return cardNum < existingNum;
+      })();
+
+      if (shouldReplace) {
         // Check oracle tags for counterspell markers
         const oracleTags = card.oracle_tags || [];
         const isCounterspell = oracleTags.includes('counterspell') || oracleTags.includes('counterspell-free');
@@ -270,20 +290,21 @@ function processAndDeduplicateCards(
         const manualCost = (card as any)._manualCost;
         const effectiveCmc = manualCost ? calculateManualCost(manualCost) : undefined;
 
-        uniqueCards.set(key, {
+        uniqueCards.set(card.oracle_id, {
           ...card,
+          oracle_id: card.oracle_id, // Ensure oracle_id is set
           isCounterspell,
           isCounterspellFree,
           effectiveCmc,
           mana_cost: manualCost || card.mana_cost,
-        });
+        } as BulkCard);
       }
     }
 
     if (uniqueCards.size > 0) {
       result.push({
         set,
-        cards: Array.from(uniqueCards.values()),
+        cards: Array.from(uniqueCards.values()) as ScryfallCard[],
       });
     }
   }

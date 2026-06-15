@@ -13,6 +13,7 @@ export interface ScryfallSet {
 
 export interface ScryfallCard {
   id: string;
+  oracle_id: string;
   name: string;
   mana_cost: string;
   cmc: number;

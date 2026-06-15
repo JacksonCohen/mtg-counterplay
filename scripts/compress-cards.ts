@@ -10,6 +10,7 @@ interface SetWithCards {
 // Minimal card data - only what we actually use in the UI
 interface MinimalCard {
   id: string;
+  oracle_id: string;
   name: string;
   mana_cost: string;
   cmc: number;
@@ -55,6 +56,7 @@ interface MinimalSet {
 function compressCard(card: ScryfallCard): MinimalCard {
   const minimal: MinimalCard = {
     id: card.id,
+    oracle_id: card.oracle_id,
     name: card.name,
     mana_cost: card.mana_cost,
     cmc: card.cmc,

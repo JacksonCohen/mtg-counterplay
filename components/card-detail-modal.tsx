@@ -6,7 +6,28 @@ import { useEffect, useState } from "react";
 import type { ScryfallCard } from "@/lib/scryfall";
 import { getCardImageUrl, getOracleText } from "@/lib/scryfall";
 import { ManaCost } from "./mana-symbol";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
+
+interface Printing {
+  id: string;
+  name: string;
+  set: string;
+  set_name: string;
+  released_at: string;
+  collector_number: string;
+  image_uris?: {
+    small: string;
+    normal: string;
+    large: string;
+  };
+  card_faces?: Array<{
+    image_uris?: {
+      small: string;
+      normal: string;
+      large: string;
+    };
+  }>;
+}
 
 interface CardDetailModalProps {
   card: ScryfallCard | null;
@@ -26,6 +47,35 @@ export function CardDetailModal({
   const [imageLoading, setImageLoading] = useState(true);
   const [currentImageUrl, setCurrentImageUrl] = useState("");
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
+  const [printings, setPrintings] = useState<Printing[]>([]);
+  const [currentPrintingIndex, setCurrentPrintingIndex] = useState(0);
+  const [loadingPrintings, setLoadingPrintings] = useState(false);
+
+  // Fetch printings when card changes
+  useEffect(() => {
+    if (!card?.oracle_id) {
+      setPrintings([]);
+      setCurrentPrintingIndex(0);
+      return;
+    }
+
+    setLoadingPrintings(true);
+    fetch(`/api/printings/${card.oracle_id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.printings) {
+          setPrintings(data.printings);
+          // Find the index of the current card in printings
+          const currentIndex = data.printings.findIndex((p: Printing) => p.id === card.id);
+          setCurrentPrintingIndex(currentIndex >= 0 ? currentIndex : 0);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch printings:', err);
+        setPrintings([]);
+      })
+      .finally(() => setLoadingPrintings(false));
+  }, [card?.oracle_id, card?.id]);
 
   useEffect(() => {
     if (card) {
@@ -58,6 +108,19 @@ export function CardDetailModal({
     setRotation({ x: 0, y: 0 });
   };
 
+  // Handle printing navigation
+  const navigatePrinting = (direction: 'next' | 'prev') => {
+    if (printings.length === 0) return;
+
+    setCurrentPrintingIndex((prevIndex) => {
+      if (direction === 'next') {
+        return prevIndex < printings.length - 1 ? prevIndex + 1 : 0;
+      } else {
+        return prevIndex > 0 ? prevIndex - 1 : printings.length - 1;
+      }
+    });
+  };
+
   // Handle keyboard navigation
   useEffect(() => {
     if (!isOpen || !onNavigate) return;
@@ -86,6 +149,12 @@ export function CardDetailModal({
 
   // Check if this is a multi-faced card (adventure, split, etc.)
   const hasMultipleFaces = card.card_faces && card.card_faces.length > 0;
+
+  // Get current printing or fall back to original card
+  const currentPrinting = printings.length > 0 ? printings[currentPrintingIndex] : null;
+  const displayImageUrl = currentPrinting
+    ? (currentPrinting.image_uris?.large || currentPrinting.card_faces?.[0]?.image_uris?.large || imageUrl)
+    : imageUrl;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -116,34 +185,65 @@ export function CardDetailModal({
 
         <div className="grid md:grid-cols-2 gap-6">
           {/* Card Image */}
-          <div
-            className="relative"
-            style={{ perspective: "1000px" }}
-            onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
-          >
+          <div className="relative flex flex-col gap-3">
             <div
-              className="relative aspect-488/680 rounded-lg overflow-hidden bg-secondary transition-transform duration-100 ease-out"
-              style={{
-                transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
-                transformStyle: "preserve-3d",
-              }}
+              style={{ perspective: "1000px" }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
             >
-              {imageLoading && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-full h-full bg-secondary animate-pulse" />
-                </div>
-              )}
-              {imageUrl && (
-                <img
-                  src={imageUrl}
-                  alt={card.name}
-                  className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ${imageLoading ? "opacity-0" : "opacity-100"}`}
-                  onLoad={() => setImageLoading(false)}
-                />
-              )}
+              <div
+                className="relative aspect-488/680 rounded-lg overflow-hidden bg-secondary transition-transform duration-100 ease-out"
+                style={{
+                  transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
+                  transformStyle: "preserve-3d",
+                }}
+              >
+                {imageLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-full h-full bg-secondary animate-pulse" />
+                  </div>
+                )}
+                {displayImageUrl && (
+                  <img
+                    src={displayImageUrl}
+                    alt={card.name}
+                    className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ${imageLoading ? "opacity-0" : "opacity-100"}`}
+                    onLoad={() => setImageLoading(false)}
+                  />
+                )}
+              </div>
             </div>
 
+            {/* Printing Navigation */}
+            {printings.length > 1 && (
+              <div className="flex items-center justify-between gap-2 bg-secondary/50 rounded-lg p-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigatePrinting('prev')}
+                  disabled={loadingPrintings}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <div className="flex-1 text-center">
+                  <div className="text-xs">
+                    Printing {currentPrintingIndex + 1} of {printings.length}
+                  </div>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigatePrinting('next')}
+                  disabled={loadingPrintings}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Card Details */}
