@@ -1,7 +1,7 @@
 import { writeFile, mkdir } from 'fs/promises';
-import { createReadStream } from 'fs';
 import { join } from 'path';
 import { pipeline } from 'stream/promises';
+import { Readable } from 'stream';
 import * as JSONStream from 'JSONStream';
 import type { ScryfallSet, ScryfallCard, ScryfallListResponse } from '../lib/scryfall';
 
@@ -10,6 +10,19 @@ interface SetWithCards {
   cards: ScryfallCard[];
 }
 
+interface BulkDataInfo {
+  object: string;
+  id: string;
+  type: string;
+  updated_at: string;
+  uri: string;
+  name: string;
+  description: string;
+  download_uri: string;
+  compressed_size: number;
+  content_type: string;
+  content_encoding: string;
+}
 
 interface BulkCard extends ScryfallCard {
   oracle_id?: string;
@@ -52,12 +65,19 @@ const MANUAL_INCLUSIONS: Record<string, ManualInclusion[]> = {
   ]
 };
 
+const USER_AGENT = 'MTG-Instant-Spell-Reference/1.0';
+
 async function fetchSets(): Promise<ScryfallSet[]> {
   console.log('Fetching sets list...');
-  const response = await fetch('https://api.scryfall.com/sets');
+  const response = await fetch('https://api.scryfall.com/sets', {
+    headers: {
+      'User-Agent': USER_AGENT,
+    },
+  });
 
   if (!response.ok) {
-    throw new Error('Failed to fetch sets');
+    const errorText = await response.text().catch(() => 'Unable to read error');
+    throw new Error(`Failed to fetch sets: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
   const data: ScryfallListResponse<ScryfallSet> = await response.json();
@@ -68,6 +88,34 @@ async function fetchSets(): Promise<ScryfallSet[]> {
     .sort((a, b) => new Date(b.released_at).getTime() - new Date(a.released_at).getTime());
 }
 
+async function getBulkDataUrl(): Promise<string> {
+  console.log('Fetching bulk data info...');
+  const bulkDataResponse = await fetch('https://api.scryfall.com/bulk-data', {
+    headers: {
+      'User-Agent': USER_AGENT,
+    },
+  });
+
+  if (!bulkDataResponse.ok) {
+    const errorText = await bulkDataResponse.text().catch(() => 'Unable to read error');
+    throw new Error(`Failed to fetch bulk data info: ${bulkDataResponse.status} ${bulkDataResponse.statusText} - ${errorText}`);
+  }
+
+  const bulkDataList: { data: BulkDataInfo[] } = await bulkDataResponse.json();
+
+  // Find the "All Cards" bulk data
+  const allCardsData = bulkDataList.data.find(item => item.type === 'all_cards');
+
+  if (!allCardsData) {
+    throw new Error('Could not find all_cards bulk data');
+  }
+
+  console.log(`Bulk data URL: ${allCardsData.download_uri}`);
+  console.log(`Size: ${(allCardsData.compressed_size / 1024 / 1024).toFixed(2)} MB (compressed)`);
+  console.log(`Last updated: ${allCardsData.updated_at}\n`);
+
+  return allCardsData.download_uri;
+}
 
 function isInstantSpeedCard(card: BulkCard): boolean {
   // Check if it's an instant
@@ -88,16 +136,27 @@ function isInstantSpeedCard(card: BulkCard): boolean {
 }
 
 async function streamAndFilterCards(
-  localPath: string,
+  url: string,
   validSetCodes: Set<string>
 ): Promise<Map<string, BulkCard[]>> {
-  console.log(`Reading bulk data from ${localPath}...`);
+  console.log('Downloading and streaming bulk data...');
+
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': USER_AGENT,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to download bulk data');
+  }
 
   const cardsBySet = new Map<string, BulkCard[]>();
   let totalProcessed = 0;
   let totalMatched = 0;
 
-  const readable = createReadStream(localPath);
+  // Convert fetch ReadableStream to Node.js Readable stream with proper buffering
+  const readable = Readable.fromWeb(response.body as any);
 
   // Parse JSON stream
   const parser = JSONStream.parse('*');
@@ -235,9 +294,11 @@ async function scrapeAllCards() {
     // Create a set of valid set codes for fast lookup
     const validSetCodes = new Set(sets.map(s => s.code.toLowerCase()));
 
-    // Stream and filter cards from local bulk data file
-    const bulkDataPath = join(process.cwd(), 'data', 'bulk-cards.json');
-    const cardsBySet = await streamAndFilterCards(bulkDataPath, validSetCodes);
+    // Get bulk data URL
+    const bulkDataUrl = await getBulkDataUrl();
+
+    // Stream and filter cards
+    const cardsBySet = await streamAndFilterCards(bulkDataUrl, validSetCodes);
 
     // Process and deduplicate
     const data = processAndDeduplicateCards(cardsBySet, sets);
