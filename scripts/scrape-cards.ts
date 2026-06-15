@@ -81,7 +81,7 @@ async function fetchSets(): Promise<ScryfallSet[]> {
 }
 
 async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCard[]> {
-  const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash)`);
+  const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash OR keyword:channel)`);
   let allCards: ScryfallCard[] = [];
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
 
@@ -133,6 +133,12 @@ async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCard[]> {
   const extraCounterspellIds = await fetchExtraCardsCounterspellIds(setCode);
   const allCounterspellIds = new Set([...counterspellIds, ...spgCounterspellIds, ...extraCounterspellIds]);
 
+  // Fetch counterspell-free cards separately
+  const counterspellFreeIds = await fetchCounterspellFreeIds(setCode);
+  const spgCounterspellFreeIds = await fetchSpecialGuestsCounterspellFreeIds(setCode);
+  const extraCounterspellFreeIds = await fetchExtraCardsCounterspellFreeIds(setCode);
+  const allCounterspellFreeIds = new Set([...counterspellFreeIds, ...spgCounterspellFreeIds, ...extraCounterspellFreeIds]);
+
   return deduplicatedCards.map(card => {
     const manualCost = (card as any)._manualCost;
     const effectiveCmc = manualCost ? calculateManualCost(manualCost) : undefined;
@@ -140,6 +146,7 @@ async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCard[]> {
     return {
       ...card,
       isCounterspell: allCounterspellIds.has(card.id),
+      isCounterspellFree: allCounterspellFreeIds.has(card.id),
       effectiveCmc: effectiveCmc,
       mana_cost: manualCost || card.mana_cost
     };
@@ -147,7 +154,7 @@ async function fetchInstantsFromSet(setCode: string): Promise<ScryfallCard[]> {
 }
 
 async function fetchCounterspellIds(setCode: string): Promise<Set<string>> {
-  const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash) oracletag:counterspell`);
+  const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash OR keyword:channel) (oracletag:counterspell OR oracletag:counterspell-free)`);
   const ids = new Set<string>();
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
 
@@ -167,8 +174,29 @@ async function fetchCounterspellIds(setCode: string): Promise<Set<string>> {
   return ids;
 }
 
+async function fetchCounterspellFreeIds(setCode: string): Promise<Set<string>> {
+  const query = encodeURIComponent(`set:${setCode} (type:instant OR keyword:flash OR keyword:channel) oracletag:counterspell-free`);
+  const ids = new Set<string>();
+  let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
+
+  while (url) {
+    const response = await fetchWithRetry(url);
+
+    if (!response.ok) {
+      console.warn(`Failed to fetch counterspell-free cards for ${setCode}: ${response.status}`);
+      return ids;
+    }
+
+    const data: ScryfallListResponse<ScryfallCard> = await response.json();
+    data.data.forEach(card => ids.add(card.id));
+    url = data.has_more ? data.next_page ?? null : null;
+  }
+
+  return ids;
+}
+
 async function fetchSpecialGuestsFromSet(setCode: string): Promise<ScryfallCard[]> {
-  const query = encodeURIComponent(`set:spg date:${setCode} (type:instant OR keyword:flash)`);
+  const query = encodeURIComponent(`set:spg date:${setCode} (type:instant OR keyword:flash OR keyword:channel)`);
   let allCards: ScryfallCard[] = [];
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
 
@@ -189,7 +217,7 @@ async function fetchSpecialGuestsFromSet(setCode: string): Promise<ScryfallCard[
 }
 
 async function fetchSpecialGuestsCounterspellIds(setCode: string): Promise<Set<string>> {
-  const query = encodeURIComponent(`set:spg date:${setCode} (type:instant OR keyword:flash) oracletag:counterspell`);
+  const query = encodeURIComponent(`set:spg date:${setCode} (type:instant OR keyword:flash OR keyword:channel) (oracletag:counterspell OR oracletag:counterspell-free)`);
   const ids = new Set<string>();
   let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
 
@@ -198,6 +226,27 @@ async function fetchSpecialGuestsCounterspellIds(setCode: string): Promise<Set<s
 
     if (!response.ok) {
       console.warn(`Failed to fetch Special Guests counterspells for ${setCode}: ${response.status}`);
+      return ids;
+    }
+
+    const data: ScryfallListResponse<ScryfallCard> = await response.json();
+    data.data.forEach(card => ids.add(card.id));
+    url = data.has_more ? data.next_page ?? null : null;
+  }
+
+  return ids;
+}
+
+async function fetchSpecialGuestsCounterspellFreeIds(setCode: string): Promise<Set<string>> {
+  const query = encodeURIComponent(`set:spg date:${setCode} (type:instant OR keyword:flash OR keyword:channel) oracletag:counterspell-free`);
+  const ids = new Set<string>();
+  let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
+
+  while (url) {
+    const response = await fetchWithRetry(url);
+
+    if (!response.ok) {
+      console.warn(`Failed to fetch Special Guests counterspell-free cards for ${setCode}: ${response.status}`);
       return ids;
     }
 
@@ -218,7 +267,7 @@ async function fetchExtraCardsFromSet(setCode: string): Promise<ScryfallCard[]> 
   let allCards: ScryfallCard[] = [];
 
   for (const sheetCode of extraSheets) {
-    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash)`);
+    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash OR keyword:channel)`);
     let url: string | null = `https://api.scryfall.com/cards/search?q=${query}&order=cmc`;
 
     while (url) {
@@ -247,7 +296,7 @@ async function fetchExtraCardsCounterspellIds(setCode: string): Promise<Set<stri
   const ids = new Set<string>();
 
   for (const sheetCode of extraSheets) {
-    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash) oracletag:counterspell`);
+    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash OR keyword:channel) (oracletag:counterspell OR oracletag:counterspell-free)`);
     let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
 
     while (url) {
@@ -255,6 +304,35 @@ async function fetchExtraCardsCounterspellIds(setCode: string): Promise<Set<stri
 
       if (!response.ok) {
         console.warn(`Failed to fetch extra counterspells from ${sheetCode} for ${setCode}: ${response.status}`);
+        break;
+      }
+
+      const data: ScryfallListResponse<ScryfallCard> = await response.json();
+      data.data.forEach(card => ids.add(card.id));
+      url = data.has_more ? data.next_page ?? null : null;
+    }
+  }
+
+  return ids;
+}
+
+async function fetchExtraCardsCounterspellFreeIds(setCode: string): Promise<Set<string>> {
+  const extraSheets = EXTRA_CARD_SHEETS[setCode.toLowerCase()] || [];
+  if (extraSheets.length === 0) {
+    return new Set();
+  }
+
+  const ids = new Set<string>();
+
+  for (const sheetCode of extraSheets) {
+    const query = encodeURIComponent(`set:${sheetCode} (type:instant OR keyword:flash OR keyword:channel) oracletag:counterspell-free`);
+    let url: string | null = `https://api.scryfall.com/cards/search?q=${query}`;
+
+    while (url) {
+      const response = await fetchWithRetry(url);
+
+      if (!response.ok) {
+        console.warn(`Failed to fetch extra counterspell-free cards from ${sheetCode} for ${setCode}: ${response.status}`);
         break;
       }
 

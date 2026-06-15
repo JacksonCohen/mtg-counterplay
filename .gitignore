@@ -28,4 +28,5 @@ next-env.d.ts
 
 # data
 /data/cards.json
+/data/bulk-cards.json
 /data/cards-compressed-pretty.json

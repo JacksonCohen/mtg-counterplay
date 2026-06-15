@@ -60,8 +60,10 @@ export function SetViewContent({ cards }: SetViewContentProps) {
 
       // Mana value filter (checkbox style - show cards matching ANY selected mv)
       // Accounts for Phyrexian mana which can be paid with life instead of mana
+      // Counterspell-free cards always match when filtering to 0 mana
       if (deferredUrlState.mv.length > 0) {
-        const matches = deferredUrlState.mv.some(mv => cardMatchesManaValue(card, mv));
+        const isCounterspellFreeWith0Mana = card.isCounterspellFree && deferredUrlState.mv.includes(0);
+        const matches = isCounterspellFreeWith0Mana || deferredUrlState.mv.some(mv => cardMatchesManaValue(card, mv));
         if (!matches) return false;
       }
 

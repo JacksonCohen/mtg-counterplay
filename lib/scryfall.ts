@@ -45,6 +45,8 @@ export interface ScryfallCard {
   legalities: Record<string, string>;
   // Marked as counterspell by Scryfall tags
   isCounterspell?: boolean;
+  // Marked as counterspell-free (can counter without targeting a spell)
+  isCounterspellFree?: boolean;
   // Effective CMC for manual cost overrides
   effectiveCmc?: number;
 }

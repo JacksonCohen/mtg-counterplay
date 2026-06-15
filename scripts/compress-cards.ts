@@ -40,6 +40,7 @@ interface MinimalCard {
     };
   }>;
   isCounterspell?: boolean;
+  isCounterspellFree?: boolean;
 }
 
 // Minimal set data - only essential metadata
@@ -102,6 +103,10 @@ function compressCard(card: ScryfallCard): MinimalCard {
 
   if (card.isCounterspell) {
     minimal.isCounterspell = true;
+  }
+
+  if (card.isCounterspellFree) {
+    minimal.isCounterspellFree = true;
   }
 
   return minimal;
