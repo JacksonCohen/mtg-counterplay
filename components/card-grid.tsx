@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import type { ScryfallCard } from "@/lib/scryfall";
 import { getCardImageUrl } from "@/lib/scryfall";
@@ -59,7 +59,6 @@ export function CardGrid({ cards }: CardGridProps) {
             key={card.id}
             card={card}
             onClick={() => setSelectedCardIndex(index)}
-            isPriority={index < 24}
           />
         ))}
       </div>
@@ -79,12 +78,21 @@ export function CardGrid({ cards }: CardGridProps) {
 interface CardTileProps {
   card: ScryfallCard;
   onClick: () => void;
-  isPriority?: boolean;
 }
 
-function CardTile({ card, onClick, isPriority = false }: CardTileProps) {
+function CardTile({ card, onClick }: CardTileProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
   const imageUrl = getCardImageUrl(card, "normal");
+
+  // Handle cached images that don't fire onLoad
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete) {
+      setImageLoaded(true);
+    }
+  }, [imageUrl]);
 
   return (
     <button
@@ -92,20 +100,32 @@ function CardTile({ card, onClick, isPriority = false }: CardTileProps) {
       onClick={onClick}
       className="group relative aspect-488/680 rounded-lg overflow-hidden bg-secondary/50 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/20 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background cursor-pointer"
     >
-      {/* Loading skeleton */}
+      {/* Loading skeleton or error state */}
       {!imageLoaded && (
-        <div className="absolute inset-0 animate-pulse bg-linear-to-br from-secondary to-muted" />
+        <div className="absolute inset-0 animate-pulse bg-linear-to-br from-secondary to-muted">
+          {imageError && (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-xs p-2 text-center">
+              {card.name}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Card image - using native img to avoid Vercel image optimization costs */}
-      {imageUrl && (
+      {imageUrl && !imageError && (
         <img
+          ref={imgRef}
+          key={imageUrl}
           src={imageUrl}
           alt={card.name}
-          loading={isPriority ? "eager" : "lazy"}
-          fetchPriority={isPriority ? "high" : "low"}
+          loading="eager"
           className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
           onLoad={() => setImageLoaded(true)}
+          onError={() => {
+            console.error(`Failed to load image for ${card.name}:`, imageUrl);
+            setImageError(true);
+          }}
+          crossOrigin="anonymous"
         />
       )}
 

@@ -2,7 +2,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { ScryfallCard } from "@/lib/scryfall";
 import { getCardImageUrl, getOracleText } from "@/lib/scryfall";
 import { ManaCost } from "./mana-symbol";
@@ -45,11 +45,13 @@ export function CardDetailModal({
   onNavigate,
 }: CardDetailModalProps) {
   const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
   const [currentImageUrl, setCurrentImageUrl] = useState("");
   const [rotation, setRotation] = useState({ x: 0, y: 0 });
   const [printings, setPrintings] = useState<Printing[]>([]);
   const [currentPrintingIndex, setCurrentPrintingIndex] = useState(0);
   const [loadingPrintings, setLoadingPrintings] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   // Fetch printings when card changes
   useEffect(() => {
@@ -82,10 +84,24 @@ export function CardDetailModal({
       const newImageUrl = getCardImageUrl(card, "large");
       if (newImageUrl !== currentImageUrl) {
         setImageLoading(true);
+        setImageError(false);
         setCurrentImageUrl(newImageUrl);
       }
     }
   }, [card, currentImageUrl]);
+
+  // Handle cached images that don't fire onLoad
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete && !img.naturalWidth) {
+      // Image failed to load
+      setImageError(true);
+      setImageLoading(false);
+    } else if (img && img.complete && img.naturalWidth) {
+      // Image already loaded (cached)
+      setImageLoading(false);
+    }
+  }, [currentImageUrl]);
 
   // Handle 3D card tilt effect
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -198,17 +214,29 @@ export function CardDetailModal({
                   transformStyle: "preserve-3d",
                 }}
               >
-                {imageLoading && (
+                {imageLoading && !imageError && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="w-full h-full bg-secondary animate-pulse" />
                   </div>
                 )}
-                {displayImageUrl && (
+                {imageError && (
+                  <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-muted-foreground">
+                    <p className="text-sm">Failed to load image</p>
+                  </div>
+                )}
+                {displayImageUrl && !imageError && (
                   <img
+                    ref={imgRef}
                     src={displayImageUrl}
                     alt={card.name}
                     className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-200 ${imageLoading ? "opacity-0" : "opacity-100"}`}
                     onLoad={() => setImageLoading(false)}
+                    onError={() => {
+                      console.error(`Failed to load modal image for ${card.name}:`, displayImageUrl);
+                      setImageError(true);
+                      setImageLoading(false);
+                    }}
+                    crossOrigin="anonymous"
                   />
                 )}
               </div>
