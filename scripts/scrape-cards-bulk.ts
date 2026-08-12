@@ -24,7 +24,6 @@ interface BulkDataInfo {
 
 interface BulkCard extends ScryfallCard {
   oracle_id?: string;
-  oracle_tags?: string[];
   promo_types?: string[];
   frame_effects?: string[];
   lang: string;
@@ -87,8 +86,8 @@ async function fetchSets(): Promise<ScryfallSet[]> {
     .sort((a, b) => new Date(b.released_at).getTime() - new Date(a.released_at).getTime());
 }
 
-async function getBulkDataUrl(): Promise<string> {
-  console.log('Fetching bulk data info...');
+async function getBulkDataUrl(type: string): Promise<string> {
+  console.log(`Fetching bulk data info for ${type}...`);
   const bulkDataResponse = await fetch('https://api.scryfall.com/bulk-data', {
     headers: {
       'User-Agent': USER_AGENT,
@@ -102,18 +101,107 @@ async function getBulkDataUrl(): Promise<string> {
 
   const bulkDataList: { data: BulkDataInfo[] } = await bulkDataResponse.json();
 
-  // Find the "All Cards" bulk data
-  const allCardsData = bulkDataList.data.find(item => item.type === 'all_cards');
+  const bulkData = bulkDataList.data.find(item => item.type === type);
 
-  if (!allCardsData) {
-    throw new Error('Could not find all_cards bulk data');
+  if (!bulkData) {
+    throw new Error(`Could not find ${type} bulk data`);
   }
 
-  console.log(`Bulk data URL: ${allCardsData.jsonl_download_uri}`);
-  console.log(`Size: ${(allCardsData.compressed_size / 1024 / 1024).toFixed(2)} MB (compressed)`);
-  console.log(`Last updated: ${allCardsData.updated_at}\n`);
+  console.log(`Bulk data URL: ${bulkData.jsonl_download_uri}`);
+  console.log(`Size: ${(bulkData.compressed_size / 1024 / 1024).toFixed(2)} MB (compressed)`);
+  console.log(`Last updated: ${bulkData.updated_at}\n`);
 
-  return allCardsData.jsonl_download_uri;
+  return bulkData.jsonl_download_uri;
+}
+
+// Scryfall bulk files are gzipped JSON Lines - one complete object per line. They
+// are served as application/gzip rather than Content-Encoding: gzip, so fetch hands
+// us the raw compressed bytes and we inflate them ourselves.
+async function* streamBulkJsonl(url: string): AsyncGenerator<any> {
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': USER_AGENT,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to download bulk data: ${response.status} ${response.statusText}`);
+  }
+
+  const readable = Readable.fromWeb(response.body as any).pipe(createGunzip());
+  const lines = createInterface({ input: readable, crlfDelay: Infinity });
+
+  for await (const line of lines) {
+    if (!line) continue;
+    yield JSON.parse(line);
+  }
+}
+
+interface OracleTag {
+  id: string;
+  slug: string;
+  child_ids: string[];
+  taggings: Array<{ oracle_id: string }>;
+}
+
+interface CounterspellTags {
+  counterspell: Set<string>;
+  counterspellFree: Set<string>;
+}
+
+// Tagger tags are hierarchical, and `oracletag:counterspell` in the Scryfall search
+// API matches a tag plus all of its descendants (counterspell-soft, counterspell-free,
+// and so on). Walk the tree the same way so the flags match what the search would return.
+function collectTaggedOracleIds(root: OracleTag, byId: Map<string, OracleTag>): Set<string> {
+  const oracleIds = new Set<string>();
+  const visited = new Set<string>();
+  const stack: OracleTag[] = [root];
+
+  while (stack.length > 0) {
+    const tag = stack.pop()!;
+    if (visited.has(tag.id)) continue;
+    visited.add(tag.id);
+
+    for (const tagging of tag.taggings) {
+      oracleIds.add(tagging.oracle_id);
+    }
+
+    for (const childId of tag.child_ids) {
+      const child = byId.get(childId);
+      if (child) stack.push(child);
+    }
+  }
+
+  return oracleIds;
+}
+
+async function fetchCounterspellTags(): Promise<CounterspellTags> {
+  const url = await getBulkDataUrl('oracle_tags');
+  console.log('Downloading oracle tags...');
+
+  const byId = new Map<string, OracleTag>();
+  const bySlug = new Map<string, OracleTag>();
+
+  for await (const tag of streamBulkJsonl(url) as AsyncGenerator<OracleTag>) {
+    byId.set(tag.id, tag);
+    bySlug.set(tag.slug, tag);
+  }
+
+  const counterspellTag = bySlug.get('counterspell');
+  const counterspellFreeTag = bySlug.get('counterspell-free');
+
+  if (!counterspellTag || !counterspellFreeTag) {
+    throw new Error('Could not find counterspell tags in oracle tag data');
+  }
+
+  const counterspell = collectTaggedOracleIds(counterspellTag, byId);
+  const counterspellFree = collectTaggedOracleIds(counterspellFreeTag, byId);
+
+  console.log(`Loaded ${bySlug.size.toLocaleString()} oracle tags`);
+  console.log(`  counterspell: ${counterspell.size} cards`);
+  console.log(`  counterspell-free: ${counterspellFree.size} cards\n`);
+
+  return { counterspell, counterspellFree };
 }
 
 function isInstantSpeedCard(card: BulkCard): boolean {
@@ -140,34 +228,13 @@ async function streamAndFilterCards(
 ): Promise<Map<string, BulkCard[]>> {
   console.log('Downloading and streaming bulk data...');
 
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': USER_AGENT,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to download bulk data');
-  }
-
   const cardsBySet = new Map<string, BulkCard[]>();
   let totalProcessed = 0;
   let totalMatched = 0;
 
-  // Convert fetch ReadableStream to Node.js Readable stream with proper buffering.
-  // The bulk file is served as application/gzip (not Content-Encoding: gzip), so
-  // fetch hands us the raw compressed bytes and we inflate them ourselves.
-  const readable = Readable.fromWeb(response.body as any).pipe(createGunzip());
-
-  // The bulk file is JSON Lines - one complete card object per line
-  const lines = createInterface({ input: readable, crlfDelay: Infinity });
-
   let lastLog = Date.now();
 
-  for await (const line of lines) {
-    if (!line) continue;
-
-    const card: BulkCard = JSON.parse(line);
+  for await (const card of streamBulkJsonl(url) as AsyncGenerator<BulkCard>) {
     totalProcessed++;
 
     // Log progress every 2 seconds
@@ -227,7 +294,8 @@ async function streamAndFilterCards(
 
 function processAndDeduplicateCards(
   cardsBySet: Map<string, BulkCard[]>,
-  sets: ScryfallSet[]
+  sets: ScryfallSet[],
+  counterspellTags: CounterspellTags
 ): SetWithCards[] {
   console.log('\nProcessing and deduplicating cards...');
 
@@ -281,10 +349,10 @@ function processAndDeduplicateCards(
       })();
 
       if (shouldReplace) {
-        // Check oracle tags for counterspell markers
-        const oracleTags = card.oracle_tags || [];
-        const isCounterspell = oracleTags.includes('counterspell') || oracleTags.includes('counterspell-free');
-        const isCounterspellFree = oracleTags.includes('counterspell-free');
+        // Check oracle tags for counterspell markers. counterspell-free is a child
+        // of counterspell, so the counterspell set already covers both.
+        const isCounterspell = counterspellTags.counterspell.has(card.oracle_id);
+        const isCounterspellFree = counterspellTags.counterspellFree.has(card.oracle_id);
 
         // Handle manual cost override
         const manualCost = (card as any)._manualCost;
@@ -321,14 +389,17 @@ async function scrapeAllCards() {
     // Create a set of valid set codes for fast lookup
     const validSetCodes = new Set(sets.map(s => s.code.toLowerCase()));
 
+    // Load counterspell oracle tags (small file, so fetch it before the big one)
+    const counterspellTags = await fetchCounterspellTags();
+
     // Get bulk data URL
-    const bulkDataUrl = await getBulkDataUrl();
+    const bulkDataUrl = await getBulkDataUrl('all_cards');
 
     // Stream and filter cards
     const cardsBySet = await streamAndFilterCards(bulkDataUrl, validSetCodes);
 
     // Process and deduplicate
-    const data = processAndDeduplicateCards(cardsBySet, sets);
+    const data = processAndDeduplicateCards(cardsBySet, sets, counterspellTags);
 
     // Ensure data directory exists
     const dataDir = join(process.cwd(), 'data');
