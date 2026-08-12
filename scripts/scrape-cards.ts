@@ -7,10 +7,16 @@ interface SetWithCards {
   cards: ScryfallCard[];
 }
 
+const USER_AGENT = 'MTG-Instant-Spell-Reference/1.0';
+
 // Helper function to fetch with retry on rate limits
 async function fetchWithRetry(url: string, retries = 7, delay = 2000): Promise<Response> {
   for (let i = 0; i < retries; i++) {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
+    });
 
     if (response.ok || response.status === 404) {
       return response;
@@ -28,7 +34,11 @@ async function fetchWithRetry(url: string, retries = 7, delay = 2000): Promise<R
     return response;
   }
 
-  return fetch(url);
+  return fetch(url, {
+    headers: {
+      'User-Agent': USER_AGENT,
+    },
+  });
 }
 
 // Simple helper to calculate mana value from manual cost strings

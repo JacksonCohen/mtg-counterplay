@@ -1,8 +1,8 @@
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
-import { pipeline } from 'stream/promises';
 import { Readable } from 'stream';
-import * as JSONStream from 'JSONStream';
+import { createGunzip } from 'zlib';
+import { createInterface } from 'readline';
 import type { ScryfallSet, ScryfallCard, ScryfallListResponse } from '../lib/scryfall';
 
 interface SetWithCards {
@@ -18,10 +18,8 @@ interface BulkDataInfo {
   uri: string;
   name: string;
   description: string;
-  download_uri: string;
+  jsonl_download_uri: string;
   compressed_size: number;
-  content_type: string;
-  content_encoding: string;
 }
 
 interface BulkCard extends ScryfallCard {
@@ -111,11 +109,11 @@ async function getBulkDataUrl(): Promise<string> {
     throw new Error('Could not find all_cards bulk data');
   }
 
-  console.log(`Bulk data URL: ${allCardsData.download_uri}`);
+  console.log(`Bulk data URL: ${allCardsData.jsonl_download_uri}`);
   console.log(`Size: ${(allCardsData.compressed_size / 1024 / 1024).toFixed(2)} MB (compressed)`);
   console.log(`Last updated: ${allCardsData.updated_at}\n`);
 
-  return allCardsData.download_uri;
+  return allCardsData.jsonl_download_uri;
 }
 
 function isInstantSpeedCard(card: BulkCard): boolean {
@@ -156,15 +154,20 @@ async function streamAndFilterCards(
   let totalProcessed = 0;
   let totalMatched = 0;
 
-  // Convert fetch ReadableStream to Node.js Readable stream with proper buffering
-  const readable = Readable.fromWeb(response.body as any);
+  // Convert fetch ReadableStream to Node.js Readable stream with proper buffering.
+  // The bulk file is served as application/gzip (not Content-Encoding: gzip), so
+  // fetch hands us the raw compressed bytes and we inflate them ourselves.
+  const readable = Readable.fromWeb(response.body as any).pipe(createGunzip());
 
-  // Parse JSON stream
-  const parser = JSONStream.parse('*');
+  // The bulk file is JSON Lines - one complete card object per line
+  const lines = createInterface({ input: readable, crlfDelay: Infinity });
 
   let lastLog = Date.now();
 
-  parser.on('data', (card: BulkCard) => {
+  for await (const line of lines) {
+    if (!line) continue;
+
+    const card: BulkCard = JSON.parse(line);
     totalProcessed++;
 
     // Log progress every 2 seconds
@@ -175,17 +178,17 @@ async function streamAndFilterCards(
 
     // Skip non-English cards
     if (card.lang !== 'en') {
-      return;
+      continue;
     }
 
     // Skip if not instant-speed
     if (!isInstantSpeedCard(card)) {
-      return;
+      continue;
     }
 
     // Get the set code
     const setCode = card.set?.toLowerCase();
-    if (!setCode) return;
+    if (!setCode) continue;
 
     // Skip if not in our valid sets
     if (!validSetCodes.has(setCode)) {
@@ -204,7 +207,7 @@ async function streamAndFilterCards(
       }
 
       if (!isExtraSheet) {
-        return;
+        continue;
       }
     } else {
       // Add to the set's card list
@@ -214,10 +217,7 @@ async function streamAndFilterCards(
       cardsBySet.get(setCode)!.push(card);
       totalMatched++;
     }
-  });
-
-  // Stream the data through the parser
-  await pipeline(readable, parser);
+  }
 
   console.log(`\n\nProcessed ${totalProcessed.toLocaleString()} total cards`);
   console.log(`Found ${totalMatched.toLocaleString()} instant-speed cards in ${cardsBySet.size} sets`);
