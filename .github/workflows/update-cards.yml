@@ -1,0 +1,56 @@
+name: Update card data
+
+on:
+  schedule:
+    # Mondays at 6:00pm EST (23:00 UTC)
+    - cron: '0 23 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-cards
+  cancel-in-progress: false
+
+jobs:
+  scrape-and-compress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Scrape cards from Scryfall
+        run: pnpm scrape:bulk
+
+      - name: Compress card data
+        run: pnpm compress
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- data/cards-compressed.json; then
+            echo "No card data changes."
+            exit 0
+          fi
+
+          git add data/cards-compressed.json
+          git commit -m "Update card data from Scryfall"
+          git push
